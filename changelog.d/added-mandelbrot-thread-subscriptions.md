@@ -1,0 +1,1 @@
+- Mandelbrot: the thread panel has a Follow/Unfollow button (thread subscriptions, MSC4306, hidden when the homeserver lacks support) and sends threaded read receipts, so reading a thread clears only that thread (#1969).

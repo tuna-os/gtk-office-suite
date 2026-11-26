@@ -1,8 +1,0 @@
-cargo::rustc-check-cfg=cfg(transport_tls)
-cargo::rustc-cfg=transport_tls
-cargo::rustc-check-cfg=cfg(transport_https)
-cargo::rustc-cfg=transport_https
-cargo::rustc-check-cfg=cfg(with_rustls)
-cargo::rustc-cfg=with_rustls
-cargo::rustc-check-cfg=cfg(with_crypto_provider)
-cargo::rustc-cfg=with_crypto_provider

@@ -15,10 +15,15 @@ on:
   # report on every pull request. The `changes` job skips the real work when
   # nothing under mandelbrot/ changed.
   pull_request:
+  # A new advisory against Mandelbrot's lock lands with no change in this
+  # repository, so the advisory gate also runs on a schedule. The build jobs
+  # do not: nothing they read changes overnight.
+  schedule:
+    - cron: '37 5 * * *'
   workflow_dispatch:
 
-# A newer push to the same pull request supersedes the queued or running one. Main
-# and a dispatch always finish.
+# A newer push to the same pull request supersedes the queued or running one. Main,
+# the schedule and a dispatch always finish.
 concurrency:
   group: mandelbrot-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -55,7 +60,7 @@ jobs:
 
   matrixrtc:
     needs: changes
-    if: needs.changes.outputs.mandelbrot == 'true'
+    if: needs.changes.outputs.mandelbrot == 'true' && github.event_name != 'schedule'
     name: Mandelbrot MatrixRTC engine (clippy, tests)
     runs-on: ubuntu-24.04
     steps:
@@ -67,9 +72,32 @@ jobs:
       - name: tests
         run: cargo test --manifest-path mandelbrot/matrixrtc/Cargo.toml
 
-  flatpak:
+  # mandelbrot/Cargo.lock against mandelbrot/deny.toml: the check
+  # mandelbrot/hooks/checks runs before a commit (`cargo deny --all-features
+  # check`). `--all-features` because the shipped Flatpak builds with
+  # `calls-media`, which brings in the LiveKit and libwebrtc media stack.
+  # ci.yml's `advisories` job reads only the root lock. Not one of the gate's
+  # `needs`: like the other advisory gates it reports without blocking, so a
+  # new advisory cannot hold up a Mandelbrot pull request that did not cause it.
+  advisories:
     needs: changes
     if: needs.changes.outputs.mandelbrot == 'true'
+    name: Mandelbrot RustSec advisory gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: cargo deny check (mandelbrot/Cargo.lock)
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        with:
+          manifest-path: mandelbrot/Cargo.toml
+          command: check
+          arguments: --all-features --config mandelbrot/deny.toml
+
+  flatpak:
+    needs: changes
+    if: needs.changes.outputs.mandelbrot == 'true' && github.event_name != 'schedule'
     name: Mandelbrot Flatpak build
     runs-on: ubuntu-24.04
     container:

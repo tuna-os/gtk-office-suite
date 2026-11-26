@@ -1,0 +1,1 @@
+- Letters: a table's heading rows (Word's "Repeat as header row", Writer's "Repeat heading") are drawn again at the top of each page the table runs onto, and stay heading rows through a save as .docx or .odt. The continued rows used to start a heading's height higher than Word's and Writer's, so a page held more of them.
