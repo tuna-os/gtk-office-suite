@@ -440,7 +440,7 @@
     "C": "green"
   },
   "tables/filtered": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },
