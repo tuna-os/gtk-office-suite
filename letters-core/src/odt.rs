@@ -4502,6 +4502,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         // Inside a text box of the header or footer: its own paragraphs'
         // styles are not the part's.
         let mut hf_box_depth = 0usize;
+        // The same depth in any master page's header or footer, the ones
+        // not shown on the first page included: a box's paragraphs are not
+        // lines of the part's own, so every master's text reads alike.
+        let mut hf_any_box_depth = 0usize;
         // In a table row of a header or footer: whether a paragraph of the
         // row has started its line yet. A row's cells read as one line, as
         // they sit side by side; a later cell's text follows a space.
@@ -4563,7 +4567,13 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
             })
         };
         loop {
-            match reader.read_event() {
+            let event = reader.read_event();
+            match &event {
+                Ok(Event::Start(e)) if (in_any_header || in_any_footer) && matches!(e.name().as_ref(), "draw:text-box" | "draw:custom-shape") => hf_any_box_depth += 1,
+                Ok(Event::End(e)) if hf_any_box_depth > 0 && matches!(e.name().as_ref(), "draw:text-box" | "draw:custom-shape") => hf_any_box_depth -= 1,
+                _ => {}
+            }
+            match event {
                 Ok(Event::Empty(e)) if e.name().as_ref() == "style:page-layout-properties" => {
                     if let Some(page) = read_page_layout(&e) {
                         last_layout = Some(layout_name.clone());
@@ -4609,7 +4619,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 // A blank paragraph of a header or footer is a line of its
                 // own, as Writer gives it one.
-                Ok(Event::Empty(e)) if (in_any_header || in_any_footer) && hf_box_depth == 0 && matches!(e.name().as_ref(), "text:p" | "text:h") => {
+                Ok(Event::Empty(e)) if (in_any_header || in_any_footer) && hf_any_box_depth == 0 && matches!(e.name().as_ref(), "text:p" | "text:h") => {
                     if hf_row.is_none_or(|started| !started) {
                         hf_row = hf_row.map(|_| true);
                         let master = cur_master.as_ref().and_then(|n| master_pages.get_mut(n));
@@ -4743,7 +4753,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         if let Some(b) = hf_box.as_mut().filter(|_| (in_header || in_footer) && hf_box_depth > 0) {
                             b.lines.push((String::new(), hf_line(attr_val(&e, "text:style-name").as_deref(), &named), false));
                         }
-                        if hf_box_depth == 0 {
+                        if hf_any_box_depth == 0 {
                             let new_line = hf_row.is_none_or(|started| !started);
                             hf_row = hf_row.map(|_| true);
                             hf_cell_gap = !new_line;
@@ -7175,6 +7185,47 @@ mod tests {
         assert_eq!(d.next_section_id, 2);
         let breaks: Vec<bool> = d.paragraphs.iter().map(|p| p.style.page_break_before).collect();
         assert_eq!(breaks, vec![false, false, false, true]);
+    }
+
+    /// A footer that is a text box (Word's classification label, through
+    /// LibreOffice) reads alike on every master page that has it: the
+    /// box's paragraph is not a line of the footer's own, on a master the
+    /// first page doesn't use as on the one it does. A later section's
+    /// footer is then the first's, continued, and keeps the box's place
+    /// and look (explanatory-note-2: its third and later pages drew the
+    /// label as the footer's plain text, at the margin).
+    #[test]
+    fn a_text_box_footer_reads_alike_on_every_master() {
+        let footer = |style: &str| {
+            format!(
+                "<style:footer><text:p><draw:frame draw:style-name=\"{style}\" text:anchor-type=\"paragraph\" svg:width=\"0.5in\" svg:height=\"0.5in\">\
+                 <draw:text-box><text:p>OFFICIAL</text:p></draw:text-box></draw:frame></text:p></style:footer>"
+            )
+        };
+        let styles = format!(
+            "<office:document-styles><office:automatic-styles>\
+             <style:style style:family=\"graphic\" style:name=\"a0\"><style:graphic-properties style:horizontal-rel=\"page\" style:vertical-rel=\"page\" style:horizontal-pos=\"center\" style:vertical-pos=\"bottom\"/></style:style>\
+             <style:style style:family=\"graphic\" style:name=\"a1\"><style:graphic-properties style:horizontal-rel=\"page\" style:vertical-rel=\"page\" style:horizontal-pos=\"center\" style:vertical-pos=\"bottom\"/></style:style>\
+             <style:page-layout style:name=\"PL0\"><style:page-layout-properties fo:page-width=\"8.27in\" fo:page-height=\"11.69in\"/></style:page-layout>\
+             <style:page-layout style:name=\"PL1\"><style:page-layout-properties fo:page-width=\"8.27in\" fo:page-height=\"11.69in\" fo:margin-right=\"1in\"/></style:page-layout>\
+             </office:automatic-styles><office:master-styles>\
+             <style:master-page style:name=\"MP0\" style:page-layout-name=\"PL0\">{}</style:master-page>\
+             <style:master-page style:name=\"MP1\" style:page-layout-name=\"PL1\">{}</style:master-page>\
+             </office:master-styles></office:document-styles>",
+            footer("a0"),
+            footer("a1")
+        );
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:family=\"paragraph\" style:master-page-name=\"MP0\"/>\
+             <style:style style:name=\"P2\" style:family=\"paragraph\" style:master-page-name=\"MP1\"/>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:p text:style-name=\"P1\">one</text:p><text:p text:style-name=\"P2\">two</text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, &styles);
+        assert_eq!(d.sections.len(), 2, "{:?}", d.sections);
+        assert_eq!((d.sections[0].footer.as_deref(), d.sections[1].footer.as_deref()), (None, None));
+        let label = d.footer_lines.iter().find(|l| l.float.is_some()).expect("the label floats");
+        assert_eq!(label.alignment, Alignment::Center);
     }
 
     /// LibreOffice converting a Word section with columns writes them as a

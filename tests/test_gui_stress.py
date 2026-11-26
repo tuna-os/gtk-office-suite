@@ -426,5 +426,23 @@ class CLITests(unittest.TestCase):
         self.assertNotIn("GUI_TEST_DISPLAY_NUM", source)
 
 
+class CampaignBudgetTests(unittest.TestCase):
+    def test_attempts_past_the_budget_fail_and_are_recorded(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "campaign")
+            with mock.patch.object(stress, "collect", return_value=["a::b"]), \
+                    mock.patch.object(stress, "revision", return_value={}), \
+                    mock.patch.object(stress, "binary_digests", return_value={}), \
+                    mock.patch.object(stress, "run_attempt") as run:
+                code = stress.main(["--repeat", "2", "--budget", "1",
+                                    "--output", out])
+            run.assert_not_called()
+            self.assertEqual(code, 1)
+            manifest = json.load(open(os.path.join(out, "manifest.json")))
+            self.assertEqual(manifest["summary"]["by_classification"],
+                             {"budget-exhausted": 2})
+
+
 if __name__ == "__main__":
     unittest.main()

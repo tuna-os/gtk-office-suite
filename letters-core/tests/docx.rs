@@ -2681,6 +2681,96 @@ fn a_bulleted_level_draws_its_own_glyph() {
     assert_eq!(markers, [Some("o".into()), Some("-".into()), Some("\u{2022}".into()), Some("\u{25aa}".into())]);
 }
 
+/// A list label is drawn in its level's own face (`w:lvl/w:rPr/w:rFonts`)
+/// as Word and LibreOffice draw it: an "o" in Courier New, a "\u{25cf}" in
+/// Noto Sans Symbols, not in the item's Arial
+/// (render-real `dcms-business-appointment-rules`). Symbol's and
+/// Wingdings' private-use bullets are read as Unicode glyphs those faces
+/// lack, so a label in them keeps the item's face; a level naming none
+/// does too.
+#[test]
+fn a_list_label_takes_its_levels_face() {
+    let mut d = Document::from_plain_text("one\ntwo\nthree\nfour\nafter");
+    for p in &mut d.paragraphs[..4] {
+        p.style.list = ListKind::Bullet;
+    }
+    let rt = doctor_parts(&d, |parts| {
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        let abs_at = numbering.find("<w:abstractNum ").expect("fixture shape changed");
+        let lvl = |i: u32, text: &str, face: Option<&str>| {
+            let rpr = face.map(|f| format!("<w:rPr><w:rFonts w:ascii=\"{f}\" w:hAnsi=\"{f}\"/></w:rPr>")).unwrap_or_default();
+            format!("<w:lvl w:ilvl=\"{i}\"><w:start w:val=\"1\"/><w:numFmt w:val=\"bullet\"/><w:lvlText w:val=\"{text}\"/>{rpr}</w:lvl>")
+        };
+        numbering.insert_str(
+            abs_at,
+            &format!(
+                "<w:abstractNum w:abstractNumId=\"94\">{}{}{}{}</w:abstractNum>",
+                lvl(0, "\u{25cf}", Some("Noto Sans Symbols")),
+                lvl(1, "o", Some("Courier New")),
+                lvl(2, "\u{f0b7}", Some("Symbol")),
+                lvl(3, "-", None),
+            ),
+        );
+        *numbering = numbering.replace("</w:numbering>", "<w:num w:numId=\"94\"><w:abstractNumId w:val=\"94\"/></w:num></w:numbering>");
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let mut out = String::new();
+        let mut rest = body.as_str();
+        let mut n = 0;
+        while let Some(at) = rest.find("<w:numPr>") {
+            let end = at + rest[at..].find("</w:numPr>").unwrap() + "</w:numPr>".len();
+            out.push_str(&rest[..at]);
+            out.push_str(&format!("<w:numPr><w:ilvl w:val=\"{n}\"/><w:numId w:val=\"94\"/></w:numPr>"));
+            rest = &rest[end..];
+            n += 1;
+        }
+        out.push_str(rest);
+        assert_eq!(n, 4, "fixture shape changed: {body}");
+        *body = out;
+    });
+    let faces: Vec<Option<&str>> = rt.paragraphs[..4].iter().map(|p| p.style.list_label_font.as_deref()).collect();
+    assert_eq!(faces, [Some("Noto Sans Symbols"), Some("Courier New"), None, None]);
+    assert_eq!(rt.paragraphs[4].style.list_label_font, None, "not a list item");
+}
+
+/// `w:textAlignment top` is read from the paragraph or its style, and
+/// written back: it decides where a list label's extra height goes.
+#[test]
+fn text_aligned_to_the_top_is_read_and_kept() {
+    let d = Document::from_plain_text("own\nstyled\nplain");
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let mut n = 0;
+        *body = body
+            .split("<w:p>")
+            .enumerate()
+            .map(|(i, part)| {
+                if i == 0 {
+                    return part.to_string();
+                }
+                n += 1;
+                let ppr = match n {
+                    1 => "<w:pPr><w:textAlignment w:val=\"top\"/></w:pPr>",
+                    2 => "<w:pPr><w:pStyle w:val=\"TopText\"/></w:pPr>",
+                    _ => "",
+                };
+                format!("<w:p>{ppr}{part}")
+            })
+            .collect::<Vec<_>>()
+            .join("");
+        assert_eq!(n, 3, "fixture shape changed: {body}");
+        let styles = parts.get_mut("word/styles.xml").unwrap();
+        *styles = styles.replace(
+            "</w:styles>",
+            "<w:style w:type=\"paragraph\" w:styleId=\"TopText\"><w:name w:val=\"Top Text\"/><w:pPr><w:textAlignment w:val=\"top\"/></w:pPr></w:style></w:styles>",
+        );
+    });
+    let tops: Vec<bool> = rt.paragraphs.iter().map(|p| p.style.text_align_top).collect();
+    assert_eq!(tops, [true, true, false]);
+    let again = round_trip(&rt);
+    let tops: Vec<bool> = again.paragraphs.iter().map(|p| p.style.text_align_top).collect();
+    assert_eq!(tops, [true, true, false], "a save kept it");
+}
+
 /// A list item numbered by its own `w:numPr` takes its level's indent
 /// over its paragraph style's, as Word and Writer resolve it: a "List
 /// Paragraph" (0.5in) item at a level of 0.25in stands at 0.25in. One

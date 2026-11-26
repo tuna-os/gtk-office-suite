@@ -1125,6 +1125,16 @@ impl Timeline {
         None
     }
 
+    /// The ID of the most recent remote event in this timeline, if any.
+    pub(crate) fn last_event_id(&self) -> Option<OwnedEventId> {
+        let sdk_items = self.imp().sdk_items();
+
+        (0..sdk_items.n_items())
+            .rev()
+            .filter_map(|pos| sdk_items.item(pos).and_downcast::<Event>())
+            .find_map(|event| event.event_id())
+    }
+
     /// The IDs of redactable events sent by the given user in this timeline.
     pub(crate) fn redactable_events_for(&self, user_id: &UserId) -> Vec<OwnedEventId> {
         let mut events = vec![];

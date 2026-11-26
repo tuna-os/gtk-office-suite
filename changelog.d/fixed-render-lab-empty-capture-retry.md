@@ -1,0 +1,1 @@
+Render lab reruns a Tier A/B capture or export that produced no pages up to twice (not only on the GTK icon-cache race signature), keeping each attempt's log, so a transient capture loss no longer fails the green -> missing ratchet (#1673).

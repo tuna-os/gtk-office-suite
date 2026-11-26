@@ -38,6 +38,7 @@ mod highlight_flags;
 mod join_rule;
 mod member;
 mod member_list;
+mod moderation;
 mod permissions;
 mod timeline;
 mod typing_list;
@@ -1854,6 +1855,85 @@ impl Room {
         }
     }
 
+    /// Whether the user follows the thread with the given root.
+    ///
+    /// Returns `None` if the homeserver does not support thread subscriptions
+    /// (MSC4306) or the request failed.
+    pub(crate) async fn is_thread_followed(&self, thread_root: OwnedEventId) -> Option<bool> {
+        let matrix_room = self.matrix_room().clone();
+        let handle = spawn_tokio!(async move {
+            if !matrix_room.client().enabled_thread_subscriptions().await? {
+                return Ok(None);
+            }
+
+            matrix_room
+                .load_or_fetch_thread_subscription(&thread_root)
+                .await
+                .map(|sub| Some(sub.is_some()))
+        });
+
+        match handle.await.expect("task was not aborted") {
+            Ok(followed) => followed,
+            Err(error) => {
+                warn!("Could not get thread subscription: {error}");
+                None
+            }
+        }
+    }
+
+    /// Follow or unfollow the thread with the given root.
+    pub(crate) async fn set_thread_followed(
+        &self,
+        thread_root: OwnedEventId,
+        follow: bool,
+    ) -> Result<(), ()> {
+        let matrix_room = self.matrix_room().clone();
+        let handle = spawn_tokio!(async move {
+            if follow {
+                matrix_room.subscribe_thread(thread_root, None).await
+            } else {
+                matrix_room.unsubscribe_thread(thread_root).await
+            }
+        });
+
+        handle
+            .await
+            .expect("task was not aborted")
+            .map_err(|error| {
+                error!("Could not change thread subscription: {error}");
+            })
+    }
+
+    /// Send a threaded read receipt for the given thread timeline.
+    ///
+    /// The thread of the receipt is inferred by the SDK from the timeline's
+    /// focus, so only the thread is marked as read.
+    pub(crate) async fn send_thread_receipt(
+        &self,
+        thread_timeline: &Timeline,
+        event_id: OwnedEventId,
+    ) {
+        let Some(session) = self.session() else {
+            return;
+        };
+        let receipt_type = if session.settings().public_read_receipts_enabled() {
+            ApiReceiptType::Read
+        } else {
+            ApiReceiptType::ReadPrivate
+        };
+
+        let matrix_timeline = thread_timeline.matrix_timeline();
+        let handle = spawn_tokio!(async move {
+            matrix_timeline
+                .send_single_receipt(receipt_type, event_id)
+                .await
+        });
+
+        if let Err(error) = handle.await.expect("task was not aborted") {
+            error!("Could not send thread read receipt: {error}");
+        }
+    }
+
     /// Mark the room as unread.
     pub(crate) async fn mark_as_unread(&self) {
         let matrix_room = self.matrix_room().clone();
@@ -2015,132 +2095,6 @@ impl Room {
             Ok(())
         } else {
             Err(failed_invites)
-        }
-    }
-
-    /// Kick the given users from this room.
-    ///
-    /// The users are a list of `(user_id, reason)` tuples.
-    ///
-    /// Returns `Ok(())` if all the kicks are sent successfully, otherwise
-    /// returns the list of users who could not be kicked.
-    pub(crate) async fn kick<'a>(
-        &self,
-        users: &'a [(OwnedUserId, Option<String>)],
-    ) -> Result<(), Vec<&'a UserId>> {
-        let users_clone = users.to_owned();
-        let matrix_room = self.matrix_room().clone();
-        let handle = spawn_tokio!(async move {
-            let futures = users_clone
-                .iter()
-                .map(|(user_id, reason)| matrix_room.kick_user(user_id, reason.as_deref()));
-            futures_util::future::join_all(futures).await
-        });
-
-        let mut failed_kicks = Vec::new();
-        for (index, result) in handle
-            .await
-            .expect("task was not aborted")
-            .iter()
-            .enumerate()
-        {
-            match result {
-                Ok(()) => {}
-                Err(error) => {
-                    error!("Could not kick user with ID {}: {error}", users[index].0);
-                    failed_kicks.push(&*users[index].0);
-                }
-            }
-        }
-
-        if failed_kicks.is_empty() {
-            Ok(())
-        } else {
-            Err(failed_kicks)
-        }
-    }
-
-    /// Ban the given users from this room.
-    ///
-    /// The users are a list of `(user_id, reason)` tuples.
-    ///
-    /// Returns `Ok(())` if all the bans are sent successfully, otherwise
-    /// returns the list of users who could not be banned.
-    pub(crate) async fn ban<'a>(
-        &self,
-        users: &'a [(OwnedUserId, Option<String>)],
-    ) -> Result<(), Vec<&'a UserId>> {
-        let users_clone = users.to_owned();
-        let matrix_room = self.matrix_room().clone();
-        let handle = spawn_tokio!(async move {
-            let futures = users_clone
-                .iter()
-                .map(|(user_id, reason)| matrix_room.ban_user(user_id, reason.as_deref()));
-            futures_util::future::join_all(futures).await
-        });
-
-        let mut failed_bans = Vec::new();
-        for (index, result) in handle
-            .await
-            .expect("task was not aborted")
-            .iter()
-            .enumerate()
-        {
-            match result {
-                Ok(()) => {}
-                Err(error) => {
-                    error!("Could not ban user with ID {}: {error}", users[index].0);
-                    failed_bans.push(&*users[index].0);
-                }
-            }
-        }
-
-        if failed_bans.is_empty() {
-            Ok(())
-        } else {
-            Err(failed_bans)
-        }
-    }
-
-    /// Unban the given users from this room.
-    ///
-    /// The users are a list of `(user_id, reason)` tuples.
-    ///
-    /// Returns `Ok(())` if all the unbans are sent successfully, otherwise
-    /// returns the list of users who could not be unbanned.
-    pub(crate) async fn unban<'a>(
-        &self,
-        users: &'a [(OwnedUserId, Option<String>)],
-    ) -> Result<(), Vec<&'a UserId>> {
-        let users_clone = users.to_owned();
-        let matrix_room = self.matrix_room().clone();
-        let handle = spawn_tokio!(async move {
-            let futures = users_clone
-                .iter()
-                .map(|(user_id, reason)| matrix_room.unban_user(user_id, reason.as_deref()));
-            futures_util::future::join_all(futures).await
-        });
-
-        let mut failed_unbans = Vec::new();
-        for (index, result) in handle
-            .await
-            .expect("task was not aborted")
-            .iter()
-            .enumerate()
-        {
-            match result {
-                Ok(()) => {}
-                Err(error) => {
-                    error!("Could not unban user with ID {}: {error}", users[index].0);
-                    failed_unbans.push(&*users[index].0);
-                }
-            }
-        }
-
-        if failed_unbans.is_empty() {
-            Ok(())
-        } else {
-            Err(failed_unbans)
         }
     }
 
