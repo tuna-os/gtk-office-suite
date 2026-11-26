@@ -37,6 +37,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       python3-numpy python3-docx python3-openpyxl \
     && rm -rf /var/lib/apt/lists/*
 
+# Families neither the shipped runtime nor this image has fall back to the
+# runtime's faces here too (the file says which and why).
+COPY runtime-fallbacks.conf /etc/fonts/conf.d/60-runtime-fallbacks.conf
+# Adwaita Sans, which the runtime draws Segoe UI in and Ubuntu doesn't
+# package: GNOME's own release of the GNOME 50 the Flatpaks run on,
+# checked against its published sha256.
+ARG ADWAITA_FONTS=adwaita-fonts-50.0
+ARG ADWAITA_FONTS_SHA256=4c927fbfeec1c503801ba510c2c94e0054c82c522cf7ba0d3be5d4d41fcf5c86
+RUN curl --proto '=https' --tlsv1.2 -fsSL -o /tmp/af.tar.xz \
+      "https://download.gnome.org/sources/adwaita-fonts/50/${ADWAITA_FONTS}.tar.xz" \
+    && echo "${ADWAITA_FONTS_SHA256}  /tmp/af.tar.xz" | sha256sum -c - \
+    && mkdir -p /usr/local/share/fonts/adwaita \
+    && tar -xJf /tmp/af.tar.xz -C /usr/local/share/fonts/adwaita --strip-components=2 "${ADWAITA_FONTS}/sans" \
+    && rm /tmp/af.tar.xz
+RUN fc-cache -f && fc-match Verdana | grep -q 'DejaVu Sans' && fc-match 'Segoe UI' | grep -q 'Adwaita Sans'
+
 # python-pptx has no Ubuntu package; Playwright ships its own Chromium.
 RUN pip3 install --no-cache-dir --break-system-packages \
       python-pptx==1.0.2 playwright==1.47.0 \

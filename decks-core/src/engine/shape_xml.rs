@@ -91,11 +91,12 @@ fn element(e: &BytesStart) -> Node {
 /// The elements whose text the tree keeps: a run's text, and the GUID of
 /// the style a table names.
 fn keeps_text(name: &str) -> bool {
-    matches!(name, "a:t" | "a:tableStyleId")
+    matches!(name, "a:t" | "a:tableStyleId" | "cdr:x" | "cdr:y")
 }
 
 /// The element tree of `xml`. Text is kept only inside `a:t` (and a
-/// table's `a:tableStyleId`), untrimmed: a run ending in a space is a word
+/// table's `a:tableStyleId`, and a chart drawing's anchor shares
+/// `cdr:x`/`cdr:y`), untrimmed: a run ending in a space is a word
 /// boundary.
 pub(super) fn parse_tree(xml: &str) -> Node {
     let mut reader = Reader::from_str(xml);
@@ -434,7 +435,11 @@ pub(crate) fn inline_scheme_colors(xml: &str, theme: &Theme) -> String {
     while let Some(at) = rest.find("<a:schemeClr") {
         out.push_str(&rest[..at]);
         let tail = &rest[at..];
-        let Some(tag_end) = tail.find('>') else { break };
+        // A truncated tag: the text before it is already out.
+        let Some(tag_end) = tail.find('>') else {
+            rest = tail;
+            break;
+        };
         let end = if tail[..tag_end].ends_with('/') {
             tag_end + 1
         } else {
@@ -1063,6 +1068,9 @@ mod tests {
         assert!(out.contains(&format!("{:02X}{:02X}{:02X}", accent.0, accent.1, accent.2)), "{out}");
         assert_eq!(out.matches("<a:srgbClr").count(), 2, "the modified one too: {out}");
         assert_eq!(inline_scheme_colors("<a:srgbClr val=\"123456\"/>", &theme), "<a:srgbClr val=\"123456\"/>");
+        // A truncated part: the text before the unterminated tag once, then
+        // the tag as it was.
+        assert_eq!(inline_scheme_colors("<c:a/><a:schemeClr val", &theme), "<c:a/><a:schemeClr val");
     }
 
     #[test]

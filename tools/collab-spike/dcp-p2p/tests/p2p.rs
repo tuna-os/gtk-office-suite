@@ -324,12 +324,19 @@ async fn a_removed_editor_cannot_publish_with_a_stale_view() {
         let listed = n.versions(&doc).await.map(|v| v.iter().any(|x| x.id == stale.id)).unwrap_or(false);
         assert!(!listed, "{} lists a version written by a removed editor", n.principal());
     }
-    // The owner DID decrypt the entry (it still holds the old group key) and then refused it: the
-    // refusal is the reader's authorisation rule, not a failure to decrypt.
+    // With p2panda-spaces 0.7.1 the owner decrypted the entry (it still holds the old group key)
+    // and the binding's reader rule refused it. p2panda-spaces 0.8 refuses it one layer down: the
+    // operation is processed (applied, not rejected, not pending) but `handle_application_message`
+    // withholds the plaintext of an author who is no longer a writer ("filter out application
+    // events if the author has concurrently lost their write access", space.rs). So the entry is
+    // not lost: it arrived and was processed, and p2panda emitted no plaintext for it.
     let entries_after = owner.entry_count(&doc).await.unwrap();
     let counters = owner.counters(&doc).await.unwrap();
-    eprintln!("MEASURE removed editor's entry: owner entries {entries_before} -> {entries_after}, listed: no; owner counters {counters:?}");
-    assert!(entries_after > entries_before, "the entry must have been decrypted and refused, not lost");
+    let ops = owner.op_counts(&doc).await.unwrap();
+    eprintln!("MEASURE removed editor's entry: owner entries {entries_before} -> {entries_after}, listed: no; owner ops (applied, pending, rejected) {ops:?}; owner counters {counters:?}");
+    assert_eq!(entries_after, entries_before, "p2panda-spaces 0.8 emits no plaintext for a removed writer");
+    assert_eq!(counters.ops_applied, 1, "the stale entry's operation was received and processed");
+    assert_eq!((ops.1, ops.2), (0, 0), "nothing is pending or rejected: it was not lost on the way");
 }
 
 /// The honest limit of revocation without a server: the rotated group key reaches a member only
@@ -393,6 +400,51 @@ async fn granting_a_role_needs_the_grantees_contact_card_first() {
     .await;
     let r = owner.grant(&doc, &guest.principal(), Role::Commenter).await;
     assert!(matches!(r, Err(StoreError::Invalid(_))), "commenter is not expressible: {r:?}");
+}
+
+/// p2panda-spaces 0.8 implements promote and demote (0.7.1: `unimplemented!()`, so the 0.7.1
+/// binding changed a role by a removal and an addition, four operations and two key rotations). A
+/// role change is now one auth operation and one key-agreement message, and a third member accepts
+/// what the promoted member publishes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_role_change_is_one_promote_or_demote_operation() {
+    init_logging();
+    let (owner, editor, viewer, doc) = default_trio().await;
+    let first = first_version(&owner, &doc).await;
+    let (applied0, _, _) = owner.op_counts(&doc).await.unwrap();
+    owner.grant(&doc, &viewer.principal(), Role::Editor).await.unwrap();
+    let (applied1, _, _) = owner.op_counts(&doc).await.unwrap();
+    eprintln!("MEASURE promote viewer -> editor: {} new operations at the owner", applied1 - applied0);
+    assert_eq!(applied1 - applied0, 2, "a promotion is one Group (promote) and one KeyAgreement message");
+    wait_for("the viewer is an editor", Duration::from_secs(30), || async {
+        (viewer.role(&doc).await.ok()? == Role::Editor).then_some(())
+    })
+    .await;
+    let v = viewer
+        .publish_version(&doc, vec![first.clone()], new_file(b"by the promoted member"), None)
+        .await
+        .unwrap();
+    wait_for("the editor lists the promoted member's version", Duration::from_secs(30), || async {
+        editor.versions(&doc).await.ok()?.iter().any(|x| x.id == v.id).then_some(())
+    })
+    .await;
+    // The owner has received the promoted member's version meanwhile: count from here.
+    wait_for("the owner lists the promoted member's version", Duration::from_secs(30), || async {
+        owner.versions(&doc).await.ok()?.iter().any(|x| x.id == v.id).then_some(())
+    })
+    .await;
+    let (applied1, _, _) = owner.op_counts(&doc).await.unwrap();
+    owner.grant(&doc, &viewer.principal(), Role::Viewer).await.unwrap();
+    let (applied2, _, _) = owner.op_counts(&doc).await.unwrap();
+    eprintln!("MEASURE demote editor -> viewer: {} new operations at the owner", applied2 - applied1);
+    assert_eq!(applied2 - applied1, 2, "a demotion is one Group (demote) and one KeyAgreement message");
+    wait_for("the member is a viewer again", Duration::from_secs(30), || async {
+        (viewer.role(&doc).await.ok()? == Role::Viewer).then_some(())
+    })
+    .await;
+    let r = viewer.publish_version(&doc, vec![first], new_file(b"after the demotion"), None).await;
+    assert!(matches!(r, Err(StoreError::Forbidden(_))), "a demoted member may not publish: {r:?}");
+    eprintln!("MEASURE role change through p2panda-spaces promote/demote: works");
 }
 
 // ------------------------------------------------------------------- hashes

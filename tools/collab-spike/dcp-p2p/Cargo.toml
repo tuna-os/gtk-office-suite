@@ -22,13 +22,13 @@ serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt", "net", "io-util", "sync", "time", "macros", "rt-multi-thread"] }
 
-# p2panda 0.7.1 (crates.io, 2026-08-21): the pieces the binding really uses.
-p2panda-core = "=0.7.1"
-p2panda-store = { version = "=0.7.1", default-features = false, features = ["sqlite", "spaces"] }
-p2panda-sync = "=0.7.1"
-p2panda-auth = { version = "=0.7.1", default-features = false, features = ["serde"] }
-p2panda-encryption = { version = "=0.7.1", default-features = false, features = ["data_scheme"] }
-p2panda-spaces = "=0.7.1"
+# p2panda 0.8.2 (crates.io, 2026-11-25): the pieces the binding really uses.
+p2panda-core = "=0.8.2"
+p2panda-store = { version = "=0.8.2", default-features = false, features = ["sqlite", "spaces"] }
+p2panda-sync = "=0.8.2"
+p2panda-auth = { version = "=0.8.2", default-features = false, features = ["serde"] }
+p2panda-encryption = { version = "=0.8.2", default-features = false, features = ["data_scheme"] }
+p2panda-spaces = "=0.8.2"
 petgraph = "0.8"
 serde_bytes = "0.11"
 

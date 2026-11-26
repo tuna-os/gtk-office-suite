@@ -1,0 +1,1 @@
+- Letters: text beside a picture that an .odt file wraps to its contour now follows the picture's drawn outline, as Writer does, instead of its whole box. A title beside a logo whose words are narrower than the picture wraps where Writer wraps it, and the setting is kept on save.

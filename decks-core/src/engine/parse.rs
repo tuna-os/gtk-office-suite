@@ -148,14 +148,31 @@ impl PendingShape {
     /// their own properties), and the text body for the lines kept.
     fn resolve(&self, st: Option<&super::text_xml::SpText>) -> (Vec<Run>, super::text_body::TextBody) {
         let Some(st) = st else { return (self.runs.clone(), Default::default()) };
+        let resolved: Vec<Option<RunStyle>> = self.run_refs.iter().map(|i| i.and_then(|i| st.runs.get(i)).map(|p| p.style())).collect();
         let runs = self
             .runs
             .iter()
-            .zip(&self.run_refs)
-            .map(|(r, i)| match i.and_then(|i| st.runs.get(i)) {
+            .zip(&resolved)
+            .enumerate()
+            .map(|(k, (r, own))| match own {
                 // The resolved look, with the run's own link: a link is
                 // never inherited, so the resolver does not carry it.
-                Some(p) => Run { text: r.text.clone(), style: RunStyle { link: r.style.link.clone(), ..p.style() } },
+                Some(style) => Run { text: r.text.clone(), style: RunStyle { link: r.style.link.clone(), ..style.clone() } },
+                // A run of breaks alone (`a:br` with no run before it in
+                // its paragraph, a title opening on an empty line) takes
+                // the look of the text it breaks, the next run's, else the
+                // one before: PowerPoint sizes the break as its paragraph's
+                // text. Left at the default size, an 18pt line led a 40pt
+                // title and the title's exact pitch was measured against
+                // it, spacing every line two and a half times too far
+                // apart (ccrm-dgpod's cover, shrunk to 75% where Impress
+                // draws 90%).
+                None if r.text.chars().all(|c| c == super::LINE_BREAK || c == '\n') => {
+                    match resolved[k + 1..].iter().flatten().next().or_else(|| resolved[..k].iter().rev().flatten().next()) {
+                        Some(style) => Run { text: r.text.clone(), style: style.clone() },
+                        None => r.clone(),
+                    }
+                }
                 None => r.clone(),
             })
             .collect();
@@ -896,20 +913,49 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 // names, read on the same budget as the
                                 // slide; a part that isn't there or isn't a
                                 // chart we draw leaves no object.
-                                let chart = slide_image_rels
-                                    .get(&c.rel_id)
-                                    .map(|t| part_path(&slide_dir.to_string_lossy(), t))
-                                    .map(|p| archive.optional_part_to_string(&p, &mut budget))
+                                let chart_path = slide_image_rels.get(&c.rel_id).map(|t| part_path(&slide_dir.to_string_lossy(), t));
+                                let chart = chart_path
+                                    .as_ref()
+                                    .map(|p| archive.optional_part_to_string(p, &mut budget))
                                     .and_then(|xml| super::chart::parse_chart_space(&super::shape_xml::inline_scheme_colors(&xml, &slide_theme)));
-                                if let Some(chart) = chart {
-                                    objects.push(SlideObject::Chart {
-                                        x: c.x * scale.x,
-                                        y: c.y * scale.y,
-                                        w: c.w * scale.x,
-                                        h: c.h * scale.y,
-                                        rotation: 0.0,
-                                        chart,
+                                if let Some(mut chart) = chart {
+                                    // Its text size onto the model's slide,
+                                    // as every run's is: a 9 pt label on a
+                                    // 13.33-inch deck is 6.75 pt here.
+                                    let k = scale.text_factor();
+                                    let onto = |v: u32| ((v as f64) * k).round().max(1.0) as u32;
+                                    chart.text_size = chart.text_size.map(onto);
+                                    if let Some(t) = chart.title.as_mut() {
+                                        t.size = t.size.map(onto);
+                                    }
+                                    let (cx, cy, cw, ch) = (c.x * scale.x, c.y * scale.y, c.w * scale.x, c.h * scale.y);
+                                    objects.push(SlideObject::Chart { x: cx, y: cy, w: cw, h: ch, rotation: 0.0, chart });
+                                    // The labels the chart's own drawing lays
+                                    // over it (`c:userShapes`), as text boxes
+                                    // over the chart: a doughnut's "5.25%"
+                                    // and its key were not drawn.
+                                    let drawing = chart_path.as_deref().and_then(|p| {
+                                        let (dir, name) = p.rsplit_once('/').unwrap_or(("", p));
+                                        let rels = archive.optional_part_to_string(&format!("{dir}/_rels/{name}.rels"), &mut budget);
+                                        let tree = super::shape_xml::parse_tree(&rels);
+                                        let mut found = Vec::new();
+                                        tree.find_all("Relationship", &mut found);
+                                        let target = found.iter().find(|r| r.attr("Type").is_some_and(|t| t.ends_with("/chartUserShapes")))?.attr("Target")?.to_string();
+                                        Some(archive.optional_part_to_string(&part_path(dir, &target), &mut budget))
                                     });
+                                    for t in drawing.iter().flat_map(|xml| super::text_xml::chart_user_texts(xml, &slide_theme, scale)) {
+                                        let (x0, y0, x1, y1) = t.frame;
+                                        objects.push(SlideObject::TextBox {
+                                            text: t.text,
+                                            x: cx + x0 * cw,
+                                            y: cy + y0 * ch,
+                                            w: (x1 - x0).max(0.0) * cw,
+                                            h: (y1 - y0).max(0.0) * ch,
+                                            rotation: 0.0,
+                                            runs: scale.text_runs(&t.runs),
+                                            body: scale.text_body(t.body),
+                                        });
+                                    }
                                 }
                             }
                             frame_index += 1;
