@@ -1887,6 +1887,12 @@ def tables(img=None):
         ws.cell(r, 2, amount)
     ws.auto_filter.ref = "A1:B5"
     ws.auto_filter.add_filter_column(0, ["North"])
+    # openpyxl writes the criteria only; Excel also stores the rows the
+    # filter hides as hidden="1". Without that LibreOffice does not
+    # re-apply the filter on load and shows every row, so the reference
+    # image contradicted the fixture's own description.
+    for hidden_row in (3, 5):
+        ws.row_dimensions[hidden_row].hidden = True
     later = wb.create_sheet("Later")
     for i in range(1, 6):
         later.cell(i, 1, i * 10)
