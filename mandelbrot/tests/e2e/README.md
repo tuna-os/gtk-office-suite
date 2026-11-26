@@ -27,6 +27,7 @@ sessions (MSC4143 memberships, MSC4140 delayed leave, MSC4195 SFU auth,
 | `run-huddle.sh`         | TEST 5: EC's `widget/huddle-call.test.ts` — a five-participant call  |
 | `run-federation.sh`     | TEST 6: EC's `widget/federation-oldest-membership-bug.spec.ts` and `widget/federated-call.test.ts`, across two homeservers |
 | `run-gui-call.sh`       | Real Flatpak app in a call, driven through AT-SPI and checked by a native bot |
+| `run-gui-handoff.sh`    | Real Flatpak app, `open-room` and `share-file` called with `gapplication` the way the other suite apps do |
 
 The configs are adapted from element-call's `docker-compose-dev.yml` +
 `backend/` dev fixtures, minimized to a single site.
