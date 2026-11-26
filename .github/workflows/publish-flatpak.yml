@@ -23,9 +23,14 @@ on:
 permissions:
   contents: read
 
+# Publishing runs share one group: a running release always finishes, and a
+# newer release replaces one that is still waiting, so only the newest tag is
+# soaked. Each soak holds 10 runners for about four hours; v2.1.104, .105, .106
+# and .107 were queued together on 2026-11-25. A build-only dispatch keeps its
+# own group.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ (github.event_name == 'push' || inputs.publish) && 'release' || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   # A tag used to publish Flatpaks regardless of what the evidence workflows

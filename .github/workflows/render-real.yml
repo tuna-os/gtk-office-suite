@@ -30,6 +30,10 @@ on:
     - cron: '50 3 * * *'
   workflow_dispatch:
   pull_request:
+    # Not required checks: a change to documentation alone does not run them.
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 
 concurrency:
   group: render-real-${{ github.ref }}-${{ github.event_name }}
