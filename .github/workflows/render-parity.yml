@@ -21,10 +21,6 @@ name: Render parity
 
 on:
   pull_request:
-    # Not required checks: a change to documentation alone does not run them.
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
   push:
     branches: [main]
   schedule:
