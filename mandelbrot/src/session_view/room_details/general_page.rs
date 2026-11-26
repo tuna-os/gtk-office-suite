@@ -7,7 +7,6 @@ use gtk::{
 };
 use ruma::{
     api::client::{
-        directory::{get_room_visibility, set_room_visibility},
         discovery::get_capabilities::v3::RoomVersionsCapability,
         room::{Visibility, upgrade_room},
     },
@@ -888,14 +887,16 @@ mod imp {
             row.set_read_only(!can_change);
 
             let matrix_room = room.matrix_room();
-            let client = matrix_room.client();
-            let request = get_room_visibility::v3::Request::new(matrix_room.room_id().to_owned());
+            let matrix_room = matrix_room.clone();
 
-            let handle = spawn_tokio!(async move { client.send(request).await });
+            let handle = spawn_tokio!(async move {
+                let result = matrix_room.privacy_settings().get_room_visibility().await;
+                result
+            });
 
             match handle.await.unwrap() {
                 Ok(response) => {
-                    let is_published = response.visibility == Visibility::Public;
+                    let is_published = response == Visibility::Public;
                     self.is_published.set(is_published);
                     row.set_is_active(is_published);
                 }
@@ -929,11 +930,15 @@ mod imp {
             };
 
             let matrix_room = room.matrix_room();
-            let client = matrix_room.client();
-            let request =
-                set_room_visibility::v3::Request::new(matrix_room.room_id().to_owned(), visibility);
+            let matrix_room = matrix_room.clone();
 
-            let handle = spawn_tokio!(async move { client.send(request).await });
+            let handle = spawn_tokio!(async move {
+                let result = matrix_room
+                    .privacy_settings()
+                    .update_room_visibility(visibility)
+                    .await;
+                result
+            });
 
             if let Err(error) = handle.await.unwrap() {
                 error!("Could not change directory visibility of room: {error}");

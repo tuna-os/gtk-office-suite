@@ -1,7 +1,7 @@
 //! The Settings window and its accounts panel.
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::config::{self, AccountConfig};
 use crate::i18n::i18n;

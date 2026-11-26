@@ -15,12 +15,34 @@
 
 use suite_common_core::people::{self, Person};
 use crate::model::{Run, RunStyle};
-pub use chrono::{Datelike, NaiveDate};
-use chrono::Duration;
+pub use jiff::civil::Date;
+use jiff::fmt::strtime;
+use jiff::Span;
 
 /// Today, in local time: what "Today" means in the "@" menu.
-pub fn today() -> NaiveDate {
-    chrono::Local::now().date_naive()
+pub fn today() -> Date {
+    jiff::Zoned::now().date()
+}
+
+/// A date by `format` (a strftime pattern, as "%Y-%m-%d"), or `None` when
+/// `input` is not exactly one.
+pub fn parse_date_with(input: &str, format: &str) -> Option<Date> {
+    strtime::parse(format, input).ok()?.to_date().ok()
+}
+
+/// A `YYYY-MM-DD` date, the form a date chip stores.
+pub fn parse_iso(input: &str) -> Option<Date> {
+    parse_date_with(input, "%Y-%m-%d")
+}
+
+/// The whole days from `from` to `to` (negative when `to` is earlier).
+pub fn days_between(from: Date, to: Date) -> i64 {
+    from.until(to).map_or(0, |span| i64::from(span.get_days()))
+}
+
+/// `date` shifted by `days`, or `date` itself past the calendar's end.
+fn add_days(date: Date, days: i64) -> Date {
+    Span::new().try_days(days).and_then(|span| date.checked_add(span)).unwrap_or(date)
 }
 use serde::{Deserialize, Serialize};
 
@@ -41,8 +63,8 @@ pub struct Chip {
 }
 
 /// A date's label: "25 Sep 2026".
-pub fn date_label(date: NaiveDate) -> String {
-    date.format("%-d %b %Y").to_string()
+pub fn date_label(date: Date) -> String {
+    strtime::format("%-d %b %Y", date).unwrap_or_else(|_| date.to_string())
 }
 
 /// The run for `chip` labelled `label`.
@@ -71,21 +93,22 @@ pub fn open_target(chip: &Chip) -> Option<String> {
 }
 
 /// A date chip for `date`.
-pub fn date_chip(date: NaiveDate) -> Run {
-    chip_run(Chip { kind: ChipKind::Date, value: date.format("%Y-%m-%d").to_string() }, date_label(date))
+pub fn date_chip(date: Date) -> Run {
+    // `Date`'s Display is the ISO form, `YYYY-MM-DD`.
+    chip_run(Chip { kind: ChipKind::Date, value: date.to_string() }, date_label(date))
 }
 
 /// Parse a date as people type one: an ISO date, "25 Sep 2026",
 /// "Sep 25 2026", "25/09/2026" (day first), or "25 Sep" (this year).
-fn parse_date(input: &str, today: NaiveDate) -> Option<NaiveDate> {
+fn parse_date(input: &str, today: Date) -> Option<Date> {
     let s = input.trim().trim_end_matches('.').replace(',', "");
     for f in ["%Y-%m-%d", "%d %b %Y", "%d %B %Y", "%b %d %Y", "%B %d %Y", "%d/%m/%Y"] {
-        if let Ok(d) = NaiveDate::parse_from_str(&s, f) {
+        if let Some(d) = parse_date_with(&s, f) {
             return Some(d);
         }
     }
     for f in ["%d %b %Y", "%d %B %Y", "%b %d %Y", "%B %d %Y"] {
-        if let Ok(d) = NaiveDate::parse_from_str(&format!("{s} {}", today.year()), f) {
+        if let Some(d) = parse_date_with(&format!("{s} {}", today.year()), f) {
             return Some(d);
         }
     }
@@ -144,7 +167,7 @@ pub fn people(doc: &crate::model::Document) -> Vec<Run> {
 /// document (`known`, from `people`) whose name or address holds the query,
 /// relative dates whose name starts with it (all three when it is empty),
 /// then a date it spells, a link it is, or a new person it names.
-pub fn suggestions(query: &str, today: NaiveDate, known: &[Run]) -> Vec<Run> {
+pub fn suggestions(query: &str, today: Date, known: &[Run]) -> Vec<Run> {
     suggestions_with_contacts(query, today, known, &[])
 }
 
@@ -154,7 +177,7 @@ pub fn suggestions(query: &str, today: NaiveDate, known: &[Run]) -> Vec<Run> {
 /// person-picker rule (`suite_common_core::people::suggest`), one chip per
 /// matching address, and never an address the document already has. A
 /// person found there is not also offered as a new one.
-pub fn suggestions_with_contacts(query: &str, today: NaiveDate, known: &[Run], contacts: &[Person]) -> Vec<Run> {
+pub fn suggestions_with_contacts(query: &str, today: Date, known: &[Run], contacts: &[Person]) -> Vec<Run> {
     let q = query.trim();
     let lower = q.to_lowercase();
     let mut out: Vec<Run> = known
@@ -179,7 +202,7 @@ pub fn suggestions_with_contacts(query: &str, today: NaiveDate, known: &[Run], c
     out.extend(RELATIVE
         .iter()
         .filter(|(name, _)| name.to_lowercase().starts_with(&lower))
-        .map(|(_, days)| date_chip(today + Duration::days(*days))));
+        .map(|(_, days)| date_chip(add_days(today, *days))));
     if q.is_empty() {
         return out;
     }
@@ -202,7 +225,7 @@ pub fn sample_document() -> crate::model::Document {
     let mut d = crate::model::Document::from_plain_text("");
     d.paragraphs[0].runs = vec![
         Run::plain("Due "),
-        date_chip(NaiveDate::from_ymd_opt(2026, 10, 3).expect("a date")),
+        date_chip(Date::new(2026, 10, 3).expect("a date")),
         Run::plain(", see "),
         chip_run(Chip { kind: ChipKind::Link, value: "https://gnome.org/?a=1&b=2".into() }, "gnome.org"),
         Run::plain(" with "),
@@ -218,8 +241,8 @@ pub fn sample_document() -> crate::model::Document {
 mod tests {
     use super::*;
 
-    fn day(y: i32, m: u32, d: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(y, m, d).unwrap()
+    fn day(y: i16, m: i8, d: i8) -> Date {
+        Date::new(y, m, d).unwrap()
     }
 
     #[test]

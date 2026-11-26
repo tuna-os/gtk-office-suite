@@ -1,0 +1,1 @@
+- Evaluation of a local, read-only MCP document-context adapter (RFC-0006), with a GTK-free prototype crate `suite-context-mcp`: opt-in, stdio only, one explicitly granted document, revision snapshots, size limits. Not wired into the apps yet (#1786).

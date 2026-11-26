@@ -189,7 +189,7 @@ async fn get_openid_token(client: &Client) -> Result<OpenIdToken, String> {
 ///
 /// Learns who is already in the call first: everyone must connect to the
 /// oldest membership's focus, and only the first participant to the one it
-/// prefers (pre-warmed from `.well-known`).
+/// prefers (pre-warmed from the homeserver's advertised RTC transports).
 async fn sfu_to_join(
     client: &Client,
     room_id: &OwnedRoomId,

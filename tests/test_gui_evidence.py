@@ -22,6 +22,7 @@ GUI_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, GUI_DIR)
 
 import collect_evidence  # noqa: E402
+import hashlib  # noqa: E402
 import pr_comment  # noqa: E402
 
 
@@ -240,7 +241,7 @@ class NoEvidenceBlockIsStillAReplaceableBlock(unittest.TestCase):
         real = pr_comment.build(
             {"entries": [{"test": "A.test_b", "outcome": "passed",
                           "video": "a.mp4", "gif": "a.gif",
-                          "duration_seconds": 2.0}]},
+                          "duration_seconds": 2.0}], "all_passed": True},
             media_base="https://media.test/x")
         updated = pr_comment.splice(body, real)
         self.assertNotIn("cancelled", updated)
@@ -303,3 +304,114 @@ class SpliceIntoPullRequestBody(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _write_clip(directory, name, outcome="passed", **over):
+    """A clip plus the sidecar the producer writes, at schema v2."""
+    video = os.path.join(directory, name + ".mp4")
+    with open(video, "wb") as f:
+        f.write(name.encode())
+    meta = {"schema_version": collect_evidence.EVIDENCE_SCHEMA_VERSION,
+            "test": name, "app": "letters", "outcome": outcome,
+            "video": name + ".mp4",
+            "video_sha256": hashlib.sha256(name.encode()).hexdigest(),
+            "revision": "r1", "run_id": "9", "attempt": "1"}
+    meta.update(over)
+    meta = {k: v for k, v in meta.items() if v is not None}
+    with open(os.path.join(directory, name + ".json"), "w") as f:
+        json.dump(meta, f)
+    return video
+
+
+class FinalOutcomeTests(unittest.TestCase):
+    """#1809: a recording never manufactures an "all passed" claim."""
+
+    def collect(self, setup):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as out:
+            setup(d)
+            return collect_evidence.collect(d, out, "t", gif=False)
+
+    def test_normal_pass_is_all_passed_with_clip_revision(self):
+        b = self.collect(lambda d: _write_clip(d, "A.t1"))
+        self.assertTrue(b["all_passed"])
+        self.assertEqual(b["revision"], "r1")
+        self.assertIn("all recorded journeys passed", collect_evidence.render_markdown(b))
+
+    def test_collector_environment_sha_is_not_the_revision(self):
+        os.environ["GITHUB_SHA"] = "collector-sha"
+        try:
+            b = self.collect(lambda d: _write_clip(d, "A.t1"))
+        finally:
+            del os.environ["GITHUB_SHA"]
+        self.assertEqual(b["revision"], "r1")
+        self.assertEqual(b["entries"][0]["revision"], "r1")
+
+    def test_skipped_is_not_a_pass(self):
+        b = self.collect(lambda d: _write_clip(d, "A.t1", "skipped"))
+        self.assertFalse(b["all_passed"])
+        self.assertEqual(b["entries"][0]["ledger_result"], "not-run")
+        self.assertNotIn("all recorded journeys passed", collect_evidence.render_markdown(b))
+
+    def test_unknown_outcome_is_not_a_pass(self):
+        b = self.collect(lambda d: _write_clip(d, "A.t1", "weird"))
+        self.assertFalse(b["all_passed"])
+        self.assertEqual(b["unverified"], 1)
+
+    def test_missing_sidecar_is_not_a_pass(self):
+        def setup(d):
+            open(os.path.join(d, "A.t1.mp4"), "wb").close()
+        b = self.collect(setup)
+        self.assertFalse(b["all_passed"])
+
+    def test_schema_mismatch_downgrades_a_pass(self):
+        b = self.collect(lambda d: _write_clip(d, "A.t1", schema_version=1))
+        self.assertFalse(b["all_passed"])
+        self.assertEqual(b["entries"][0]["outcome"], "invalid")
+        self.assertIn("schema_version", b["entries"][0]["problems"][0])
+
+    def test_stale_clip_with_wrong_hash_is_not_a_pass(self):
+        b = self.collect(lambda d: _write_clip(d, "A.t1", video_sha256="0" * 64))
+        self.assertFalse(b["all_passed"])
+
+    def test_mixed_revisions_are_not_a_pass(self):
+        def setup(d):
+            _write_clip(d, "A.t1")
+            _write_clip(d, "A.t2", revision="r2")
+        b = self.collect(setup)
+        self.assertFalse(b["all_passed"])
+        self.assertEqual(b["revision"], "")
+        self.assertTrue(any("mixed revision" in p for p in b["bundle_problems"]))
+
+    def test_duplicate_ids_are_not_a_pass(self):
+        def setup(d):
+            _write_clip(d, "A.t1")
+            _write_clip(d, "B.t1", test="A.t1")
+        b = self.collect(setup)
+        self.assertFalse(b["all_passed"])
+        self.assertTrue(any("duplicate" in p for p in b["bundle_problems"]))
+
+    def test_failed_beside_passed_is_reported_failed(self):
+        def setup(d):
+            _write_clip(d, "A.t1")
+            _write_clip(d, "A.t2", "failed")
+        b = self.collect(setup)
+        self.assertFalse(b["all_passed"])
+        self.assertEqual(b["failed"], 1)
+
+    def test_comment_headline_needs_all_passed(self):
+        b = self.collect(lambda d: _write_clip(d, "A.t1", "skipped"))
+        self.assertNotIn("✅", pr_comment.build(b).split("\n")[1])
+
+
+class ProducerCollectorAgreementTests(unittest.TestCase):
+    def test_schema_versions_match(self):
+        src = open(os.path.join(GUI_DIR, "framework", "base.py")).read()
+        self.assertIn(
+            f"EVIDENCE_SCHEMA_VERSION = {collect_evidence.EVIDENCE_SCHEMA_VERSION}\n", src)
+
+    def test_producer_writes_final_outcome_after_teardown(self):
+        src = open(os.path.join(GUI_DIR, "framework", "base.py")).read()
+        tear = src[src.index("    def tearDown(self):"):src.index("tolerated_gtk_criticals: tuple")]
+        self.assertLess(tear.index("_check_gtk_diagnostics()"),
+                        tear.index("self._finish_recording(outcome)"))
+        self.assertIn("finally:", tear)

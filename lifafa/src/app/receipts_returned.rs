@@ -2,7 +2,7 @@
 //! and the receipt mail is filed away, since what it says is on the message
 //! now.
 
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::config::{self, ReturnedReceipts};
 use crate::i18n::{i18n, i18n_f};

@@ -2,7 +2,7 @@
 //! renders or patches what it changes.
 
 use super::MessageView;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 use webkit6::prelude::WebViewExt;
 
 impl MessageView {

@@ -3,7 +3,7 @@
 use super::types::MessageViewInput;
 use super::MessageView;
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 impl MessageView {
     pub(super) fn on_open_find(&mut self, sender: &ComponentSender<Self>) {
