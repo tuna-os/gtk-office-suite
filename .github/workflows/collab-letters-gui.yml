@@ -121,7 +121,7 @@ jobs:
         run: |
           sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager openbox xdotool \
             x11-utils ffmpeg python3-dogtail python3-pytest python3-pil python3-requests
-          python3 -m pip install --break-system-packages mss
+          python3 -m pip install --break-system-packages --require-hashes -r tests/gui/requirements-capture.txt
 
       - name: Output directory
         run: mkdir -p "$GITHUB_WORKSPACE/logs" "$GITHUB_WORKSPACE/gtk-diagnostics"

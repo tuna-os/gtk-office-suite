@@ -69,7 +69,7 @@ jobs:
         run: |
           sudo apt-get install -y -qq xvfb dbus at-spi2-core \
             python3-dogtail python3-pil xcompmgr
-          python3 -m pip install --break-system-packages mss
+          python3 -m pip install --break-system-packages --require-hashes -r tests/gui/requirements-capture.txt
 
       - name: Capture walkthrough and feature tour
         run: tests/gui/capture_walkthrough.sh docs/screenshots
