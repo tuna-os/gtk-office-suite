@@ -12,7 +12,12 @@ mod call_bar;
 mod dialog;
 mod participant_tile;
 mod prescreen;
-mod state;
+/// The call model the widgets bind to. It lives in the session layer with the
+/// [`CallManager`](crate::session::CallManager) that drives it; this keeps the
+/// `state::` paths used by the widgets in this module working.
+mod state {
+    pub(crate) use crate::session::{CallConnectionState, CallParticipant, CallState};
+}
 
 #[allow(unused_imports)]
 pub(crate) use self::{
