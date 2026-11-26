@@ -24,6 +24,11 @@ mod ram_cache;
 // src/relm/LICENSE-NOTICE.md. Third-party code: not held to this crate's lints.
 #[allow(warnings, clippy::all, clippy::pedantic, clippy::cargo)]
 mod relm;
+// Upstream's `use relm4::prelude::*;` resolves to the in-tree runtime, so the
+// files that only import it stay byte-identical to upstream and are not
+// touchpoints (#2247).
+extern crate self as relm4;
+pub use relm::{main_application, prelude, ComponentSender, Sender};
 mod rng;
 mod services;
 mod ui;

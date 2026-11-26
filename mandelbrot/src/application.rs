@@ -360,24 +360,39 @@ mod imp {
         /// Matrix account, and nothing else holds its secrets). It is never
         /// activated; only its state is read.
         fn set_up_matrix_account_action(&self) {
-            let action = gio::SimpleAction::new_stateful(
+            let account = gio::SimpleAction::new_stateful(
                 "matrix-account",
                 None,
                 &String::new().to_variant(),
             );
-            action.connect_activate(|_, _| {});
-            self.obj().add_action(&action);
+            account.connect_activate(|_, _| {});
+            self.obj().add_action(&account);
+
+            // `matrix-homeserver`: the homeserver URL of the same session. With
+            // `matrix-account` it is the whole non-secret hint the collaboration
+            // sidecar needs to run its own sign-in as a second device (ADR 0013).
+            let homeserver = gio::SimpleAction::new_stateful(
+                "matrix-homeserver",
+                None,
+                &String::new().to_variant(),
+            );
+            homeserver.connect_activate(|_, _| {});
+            self.obj().add_action(&homeserver);
 
             let update = clone!(
                 #[weak]
-                action,
+                account,
+                #[weak]
+                homeserver,
                 move |session_list: &SessionList| {
-                    let user_id = (0..session_list.n_items())
+                    let info = (0..session_list.n_items())
                         .filter_map(|i| session_list.item(i).and_downcast::<SessionInfo>())
-                        .find(|info| !info.is::<FailedSession>())
-                        .map(|info| info.user_id().to_string())
+                        .find(|info| !info.is::<FailedSession>());
+                    let (user_id, server) = info
+                        .map(|info| (info.user_id().to_string(), info.homeserver_string()))
                         .unwrap_or_default();
-                    action.set_state(&user_id.to_variant());
+                    account.set_state(&user_id.to_variant());
+                    homeserver.set_state(&server.to_variant());
                 }
             );
             update(&self.session_list);

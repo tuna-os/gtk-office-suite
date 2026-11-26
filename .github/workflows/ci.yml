@@ -85,6 +85,7 @@ jobs:
             tests/test_workspace_test_lanes.py \
             tests/test_validate_parity.py \
             tests/test_gui_evidence.py \
+            tests/test_render_lab_observation.py \
             tests/test_validate_capabilities.py \
             tests/test_gui_stress.py \
             tests/test_open_corpus.py \
@@ -152,6 +153,7 @@ jobs:
             tests/test_feature_docs.py \
             tests/test_keep_changed_screenshots.py \
             tests/test_required_checks.py \
+            tests/test_publisher_pdfs.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
@@ -190,6 +192,7 @@ jobs:
             tests/test_workspace_test_lanes.py \
             tests/test_validate_parity.py \
             tests/test_gui_evidence.py \
+            tests/test_render_lab_observation.py \
             tests/test_validate_capabilities.py \
             tests/test_gui_stress.py \
             tests/test_open_corpus.py \
@@ -257,6 +260,7 @@ jobs:
             tests/test_feature_docs.py \
             tests/test_keep_changed_screenshots.py \
             tests/test_required_checks.py \
+            tests/test_publisher_pdfs.py \
             tests/adaptive_editor_contract.py > python-collected.txt
           # The collection and the run's own report together: a test that
           # was collected and has no outcome did not run, and a lane whose

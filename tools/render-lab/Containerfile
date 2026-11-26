@@ -23,8 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # Reference-matching fonts: Carlito/Caladea are metric-compatible
       # with Calibri/Cambria, Liberation with Arial/Times/Courier. Both
       # renderers must see the same fonts or the comparison measures
-      # font substitution instead of our layout.
+      # font substitution instead of our layout. TeX Gyre, because the
+      # shipped Flatpak's GNOME runtime has it: Palatino Linotype is TeX
+      # Gyre Pagella there (Tier C's fc-match log), and DejaVu Serif here
+      # without it, so Tier C compared our Pagella with LibreOffice's
+      # DejaVu Serif (docs/KNOWN-GAPS.md).
       fonts-crosextra-carlito fonts-crosextra-caladea fonts-liberation \
+      fonts-texgyre \
       # The toolbar icons; without the theme every button is a broken-image
       # glyph and Tier B no longer shows what users see. The symbolic icons
       # are SVGs, so gdk-pixbuf also needs librsvg's loader.

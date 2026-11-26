@@ -3,7 +3,7 @@ use std::sync::Arc;
 use futures_util::{StreamExt, lock::Mutex};
 use gettextrs::gettext;
 use gtk::{gio, glib, glib::clone, prelude::*, subclass::prelude::*};
-use matrix_sdk::{Client, SessionChange, media::MediaRetentionPolicy};
+use matrix_sdk::{Client, SessionChange};
 use matrix_sdk_ui::{
     room_list_service,
     sync_service::{self, SyncService},
@@ -28,11 +28,13 @@ mod ignored_users;
 mod notifications;
 mod remote;
 mod room;
+mod recovery_screen;
 mod room_list;
 mod security;
 mod session_settings;
 mod sidebar_data;
 mod space_hierarchy;
+mod storage;
 mod sync;
 mod user;
 mod user_sessions_list;
@@ -40,8 +42,12 @@ mod verification;
 
 pub(crate) use self::{
     call::*, global_account_data::*, ignored_users::*, notifications::*, remote::*, room::*,
-    room_list::*, security::*, session_settings::*, sidebar_data::*, space_hierarchy::*, user::*,
+    recovery_screen::*, room_list::*, security::*, session_settings::*, sidebar_data::*, space_hierarchy::*, user::*,
     user_sessions_list::*, verification::*,
+};
+pub(crate) use self::storage::{
+    MEDIA_CACHE_LIMIT_CHOICES_MIB, choice_index as media_cache_limit_choice_index,
+    choice_limit as media_cache_limit_choice_mib,
 };
 use crate::{
     Application,
@@ -721,13 +727,15 @@ impl Session {
             .ok_or(ClientSetupError::NoSessionTokens)?;
 
         let stored_session_clone = stored_session.clone();
+        let media_cache_limit_mib = settings.media_cache_limit_mib();
         let client = spawn_tokio!(async move {
             let client = matrix::client_with_stored_session(stored_session_clone, tokens).await?;
 
             // Make sure that we use the proper retention policy.
             let media = client.media();
             let used_media_retention_policy = media.media_retention_policy().await?;
-            let wanted_media_retention_policy = MediaRetentionPolicy::default();
+            let wanted_media_retention_policy =
+                storage::media_retention_policy(media_cache_limit_mib);
 
             if used_media_retention_policy != wanted_media_retention_policy {
                 media
@@ -783,6 +791,70 @@ impl Session {
     /// The cache for remote data.
     pub(crate) fn remote_cache(&self) -> &RemoteCache {
         self.imp().remote_cache()
+    }
+
+    /// The size on disk of the stores that hold cached data, in bytes.
+    ///
+    /// Returns `(media, event_cache)`; each is `None` if the store cannot
+    /// report its size.
+    pub(crate) async fn store_sizes(&self) -> Result<(Option<u64>, Option<u64>), String> {
+        let client = self.client();
+
+        spawn_tokio!(async move {
+            client
+                .get_store_sizes()
+                .await
+                .map(|sizes| {
+                    (
+                        sizes.media_store.map(|size| size as u64),
+                        sizes.event_cache_store.map(|size| size as u64),
+                    )
+                })
+                .map_err(|error| error.to_string())
+        })
+        .await
+        .expect("task was not aborted")
+    }
+
+    /// Apply the media cache limit of the session settings and trim the media
+    /// cache to it now.
+    pub(crate) async fn apply_media_cache_limit(&self) -> Result<(), String> {
+        let client = self.client();
+        let policy = storage::media_retention_policy(self.settings().media_cache_limit_mib());
+
+        spawn_tokio!(async move {
+            let media = client.media();
+            media
+                .set_media_retention_policy(policy)
+                .await
+                .map_err(|error| error.to_string())?;
+            media.clean().await.map_err(|error| error.to_string())
+        })
+        .await
+        .expect("task was not aborted")
+    }
+
+    /// Remove every cached media, then restore the media cache limit.
+    pub(crate) async fn clear_media_cache(&self) -> Result<(), String> {
+        let client = self.client();
+        let restore = storage::media_retention_policy(self.settings().media_cache_limit_mib());
+
+        spawn_tokio!(async move {
+            let media = client.media();
+            media
+                .set_media_retention_policy(storage::clear_all_policy())
+                .await
+                .map_err(|error| error.to_string())?;
+            let cleaned = media.clean().await.map_err(|error| error.to_string());
+            // Always put the user's limit back, even if the cleanup failed.
+            let restored = media
+                .set_media_retention_policy(restore)
+                .await
+                .map_err(|error| error.to_string());
+            cleaned.and(restored)
+        })
+        .await
+        .expect("task was not aborted")
     }
 
     /// Log out of this session.

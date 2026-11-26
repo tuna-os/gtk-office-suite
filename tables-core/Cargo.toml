@@ -17,7 +17,7 @@ ironcalc_base = "0.9"
 calamine = "0.38"
 rust_xlsxwriter = "0.102"
 regex = "1"
-chrono = "0.4"
+jiff = { version = "0.2", default-features = false, features = ["std"] }
 zip = "9.0"
 # RFC-0001 Phase 2 (feature `collab`, off by default): the workbook as a
 # Loro document. None of these is built without the feature.

@@ -3,7 +3,7 @@
 //! in view (#432).
 
 use adw::prelude::*;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use super::{PgpKeys, PgpKeysInput};
 use crate::i18n::{i18n, i18n_f, ni18n_f};

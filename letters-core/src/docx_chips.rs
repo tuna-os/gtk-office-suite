@@ -151,7 +151,7 @@ fn chip_of(control: &str) -> Option<(Chip, String)> {
     }
     let full = attribute(props, "w:date", "w:fullDate")?;
     let date = full.get(..10)?;
-    crate::chips::NaiveDate::parse_from_str(date, "%Y-%m-%d").ok()?;
+    crate::chips::parse_iso(date)?;
     Some((Chip { kind: ChipKind::Date, value: date.to_string() }, label))
 }
 

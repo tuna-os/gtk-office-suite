@@ -10,6 +10,9 @@
 // Formulas repeat here and have their relative references shifted by the
 // controller, which has the engine.
 
+use jiff::civil::Date;
+use jiff::Span;
+
 /// One cell's fillable content: its input text (formula text including
 /// the leading `=`, or a plain value) and whether it's a formula.
 pub type FillCell = (String, bool);
@@ -55,25 +58,27 @@ fn trend(values: &[f64], target_len: usize) -> Vec<f64> {
 }
 
 /// Dates as spreadsheet serials (days since 1899-12-30).
-fn to_date(serial: f64) -> Option<chrono::NaiveDate> {
+fn to_date(serial: f64) -> Option<Date> {
     (serial.fract() == 0.0).then_some(())?;
-    chrono::NaiveDate::from_ymd_opt(1899, 12, 30)?.checked_add_signed(chrono::Duration::days(serial as i64))
+    epoch().checked_add(Span::new().try_days(serial as i64).ok()?).ok()
 }
 
-fn to_serial(date: chrono::NaiveDate) -> f64 {
-    let epoch = chrono::NaiveDate::from_ymd_opt(1899, 12, 30).unwrap();
-    (date - epoch).num_days() as f64
+fn epoch() -> Date {
+    jiff::civil::date(1899, 12, 30)
+}
+
+fn to_serial(date: Date) -> f64 {
+    epoch().until(date).map_or(0.0, |span| f64::from(span.get_days()))
 }
 
 /// Dates continue by whole months (or years) when they fall on the same
 /// day of the month, else by their day step; one date goes up a day.
 fn date_series(values: &[f64], target_len: usize) -> Option<Vec<f64>> {
-    use chrono::Datelike;
-    let dates: Vec<chrono::NaiveDate> = values.iter().map(|v| to_date(*v)).collect::<Option<_>>()?;
+    let dates: Vec<Date> = values.iter().map(|v| to_date(*v)).collect::<Option<_>>()?;
     if dates.len() == 1 {
         return Some((1..=target_len).map(|i| values[0] + i as f64).collect());
     }
-    let months = |d: &chrono::NaiveDate| d.year() as i64 * 12 + d.month0() as i64;
+    let months = |d: &Date| i64::from(d.year()) * 12 + i64::from(d.month()) - 1;
     let same_day = dates.windows(2).all(|w| w[0].day() == w[1].day());
     let month_steps: Vec<i64> = dates.windows(2).map(|w| months(&w[1]) - months(&w[0])).collect();
     if same_day && month_steps.iter().all(|m| *m == month_steps[0] && *m != 0) {
@@ -83,7 +88,7 @@ fn date_series(values: &[f64], target_len: usize) -> Option<Vec<f64>> {
                 let m = months(&last) + month_steps[0] * i;
                 let (y, m0) = (m.div_euclid(12), m.rem_euclid(12));
                 // A day the month doesn't have lands on its last day.
-                (1..=last.day()).rev().find_map(|d| chrono::NaiveDate::from_ymd_opt(y as i32, m0 as u32 + 1, d)).map(to_serial)
+                (1..=last.day()).rev().find_map(|d| Date::new(y as i16, m0 as i8 + 1, d).ok()).map(to_serial)
             })
             .collect();
     }

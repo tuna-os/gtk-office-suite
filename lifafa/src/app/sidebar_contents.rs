@@ -1,7 +1,7 @@
 //! What the sidebar lists: accounts, their folders in the chosen order,
 //! and the folder choices the account editor offers.
 
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::config::{self, AccountConfig};
 use crate::models::Folder;

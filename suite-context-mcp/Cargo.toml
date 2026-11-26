@@ -1,0 +1,15 @@
+[package]
+name = "suite-context-mcp"
+version = "0.1.0"
+edition = "2021"
+description = "Prototype: opt-in, local, read-only MCP (stdio) document-context adapter. GTK-free; the app supplies the live document through ContextSource (#1786)"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/tuna-os/gtk-office-suite"
+
+# No network stack, no async runtime, no document engine: serde_json only.
+[dependencies]
+serde_json = "1"
+
+[lib]
+name = "suite_context_mcp"
+path = "src/lib.rs"

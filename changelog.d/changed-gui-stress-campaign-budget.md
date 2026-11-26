@@ -1,0 +1,1 @@
+- CI: the GUI stress campaign now has a total time budget (`--budget`, 270 of the job's 300 minutes). Attempts that no longer fit fail as `budget-exhausted`, so the manifest and evidence upload before the job limit cancels the run (#1672).

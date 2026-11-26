@@ -1,6 +1,6 @@
 //! Applying message list settings.
 
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 
 use crate::config;
 use crate::ui::contacts_page::ContactsPageInput;

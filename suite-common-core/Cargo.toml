@@ -9,7 +9,7 @@ keywords = ["office", "undo", "number-format"]
 
 [dependencies]
 num-format = "0.4"
-chrono = "0.4"
+jiff = { version = "0.2", default-features = false, features = ["std"] }
 regex = "1"
 tempfile = "3"
 serde = { version = "1", features = ["derive"] }

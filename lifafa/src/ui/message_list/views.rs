@@ -9,7 +9,7 @@ use super::MessageList;
 use crate::models::Message;
 use crate::ui::message_row::RowData;
 use gtk::glib;
-use crate::relm::prelude::*;
+use relm4::prelude::*;
 use std::rc::Rc;
 
 /// What `compute_rows` hands the view: the window's rows, whether they go

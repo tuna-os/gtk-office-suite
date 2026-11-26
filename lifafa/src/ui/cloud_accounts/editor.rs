@@ -235,7 +235,7 @@ impl EditorRows {
 pub(super) fn build_editor(
     index: Option<usize>,
     account: CloudAccount,
-    sender: crate::relm::Sender<CloudAccountsInput>,
+    sender: relm4::Sender<CloudAccountsInput>,
 ) -> (gtk::Widget, Rc<dyn Fn() -> bool>) {
     let EditorRows {
         kind,

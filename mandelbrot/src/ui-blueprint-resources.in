@@ -12,6 +12,7 @@ account_settings/notifications_page.blp
 account_settings/safety_page/ignored_users_subpage/ignored_user_row.blp
 account_settings/safety_page/ignored_users_subpage/mod.blp
 account_settings/safety_page/mod.blp
+account_settings/storage_page.blp
 account_settings/user_session/link_device_subpage.blp
 account_settings/user_session/user_session_list_subpage.blp
 account_settings/user_session/user_session_row.blp

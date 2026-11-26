@@ -46,3 +46,20 @@ def test_without_paired_words_the_capture_is_scored_whole(monkeypatch):
     monkeypatch.setattr(compare, "page_in_capture", lambda r, o: None)
     _, same, scale = compare.window_to_page(ref, ours, 9.0)
     assert same is ours and scale == 9.0
+
+
+def test_unpaired_long_sheet_is_trimmed_to_the_first_page_rows():
+    compare = _compare()
+    ref = Image.new("RGB", (100, 500), "white")  # page 1: 50 rows
+    ours = Image.new("RGB", (130, 950), "white")  # 73 rows, same pitch
+    cut, scale = compare.trim_to_page_rows(ref, ours, 1.5)
+    assert cut.size == (130, 650)
+    assert scale == pytest.approx(1.3)
+
+
+def test_matching_capture_is_not_trimmed():
+    compare = _compare()
+    ref = Image.new("RGB", (100, 500), "white")
+    ours = Image.new("RGB", (100, 520), "white")
+    cut, scale = compare.trim_to_page_rows(ref, ours, 1.0)
+    assert cut is ours and scale == 1.0

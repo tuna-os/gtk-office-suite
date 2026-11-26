@@ -4089,7 +4089,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     let tagged = attr_val(&e, "loext:tag").as_deref().and_then(chip_from_name);
                     let dated = || {
                         let v = attr_val(&e, "loext:current-date")?.get(..10)?.to_string();
-                        crate::chips::NaiveDate::parse_from_str(&v, "%Y-%m-%d").ok()?;
+                        crate::chips::parse_iso(&v)?;
                         (attr_val(&e, "loext:date").as_deref() == Some("true"))
                             .then_some(crate::chips::Chip { kind: crate::chips::ChipKind::Date, value: v })
                     };
@@ -4099,7 +4099,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:date" if para.is_some() => {
                     let value = attr_val(&e, "text:date-value").and_then(|v| v.get(..10).map(str::to_string));
-                    if let Some(v) = value.filter(|v| crate::chips::NaiveDate::parse_from_str(v, "%Y-%m-%d").is_ok()) {
+                    if let Some(v) = value.filter(|v| crate::chips::parse_iso(v).is_some()) {
                         chip = Some((crate::chips::Chip { kind: crate::chips::ChipKind::Date, value: v }, String::new(), "text:date"));
                     }
                 }
@@ -5066,6 +5066,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 /// A paragraph's named style, and whether its spacing gives way beside a
 /// paragraph of the same style (`style:contextual-spacing`, the nearest
 /// style in its chain that says): an automatic style is its parent's.
+/// Writer keeps the flag in one setting with the space above and below
+/// (`inherited_spacing`), so a style that states its space above or below
+/// and not the flag settles it off: the W1 notes' bullets are automatic
+/// styles giving 8pt below under a contextual List Paragraph, and Writer
+/// leaves the 8pt between them.
 fn contextual_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (String, bool) {
     let is_auto = |n: &str| auto.para.contains_key(n) || auto.para_parent.contains_key(n) || auto.para_text.contains_key(n);
     let mut style = None;
@@ -5078,6 +5083,9 @@ fn contextual_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Str
         }
         if on.is_none() {
             on = auto.contextual.get(&n).or_else(|| named.contextual.get(&n)).copied();
+        }
+        if on.is_none() && auto.para.get(&n).or_else(|| named.para.get(&n)).is_some_and(|st| st.sets[0] || st.sets[1]) {
+            on = Some(false);
         }
         cur = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
     }
@@ -6994,6 +7002,30 @@ mod tests {
         let d = read_package(content, styles);
         let after: Vec<f64> = d.paragraphs.iter().map(|p| p.style.space_after_pt).collect();
         assert_eq!(after, [0.0, 8.0, 12.0], "only between the two list paragraphs, the last with the default's");
+    }
+
+    /// An automatic style that states its own space below under a
+    /// contextual List Paragraph turns contextual spacing off, as Writer
+    /// keeps the two in one setting: the W1 notes' bullets give 8pt below
+    /// each, and Writer leaves it between them, where they had none.
+    /// Beside them, items whose automatic styles set no spacing still
+    /// give way.
+    #[test]
+    fn a_style_stating_its_own_spacing_settles_contextual_spacing_off() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"/>\
+             <style:style style:name=\"ListParagraph\" style:family=\"paragraph\" style:parent-style-name=\"Normal\"><style:paragraph-properties style:contextual-spacing=\"true\" fo:margin-bottom=\"6pt\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-left=\"36pt\"/></style:style>\
+             <style:style style:name=\"P2\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-top=\"0in\" fo:margin-bottom=\"8pt\"/></style:style>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:p text:style-name=\"P1\">one</text:p><text:p text:style-name=\"P1\">two</text:p>\
+             <text:p text:style-name=\"P2\">three</text:p><text:p text:style-name=\"P2\">four</text:p><text:p text:style-name=\"Normal\">after</text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let after: Vec<f64> = d.paragraphs.iter().map(|p| p.style.space_after_pt).collect();
+        assert_eq!(after[..4], [0.0, 0.0, 8.0, 8.0], "P1 gives way to its own style; P2 states its spacing and keeps it");
     }
 
     /// A line break within a paragraph (`text:line-break`, Shift+Enter)
