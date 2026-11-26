@@ -1,0 +1,1 @@
+- Letters: text beside a floating image in an ODT keeps the clearance the file asks for (`fo:margin`, including 0) instead of a fixed 9pt gap (#1932).

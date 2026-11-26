@@ -203,6 +203,10 @@ pub struct ImageAnchor {
     /// How the text flows around it.
     #[serde(default)]
     pub wrap: Wrap,
+    /// Room kept between it and text beside it, in EMU (ODF `fo:margin`);
+    /// `None` = the layout's default gap.
+    #[serde(default)]
+    pub wrap_gap_emu: Option<u32>,
 }
 
 /// How text flows around a floating picture or text box.
