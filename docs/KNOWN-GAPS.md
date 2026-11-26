@@ -66,6 +66,7 @@ the cells at their own size.
 | Table style headers and first columns | Header rows drawn bold in every style, and a marked first column painted as the header, where Impress bolds only Light Style 1's and paints the first column as the header only in the medium styles | Fixed on main (#2387) |
 | Bold from the deck's own table styles (`ppt/tableStyles.xml`) | A custom style's header and first-column weight ignored | Fixed on main (#2405) |
 | Run sizes on a deck not 10 inches wide | Rounded to half points after scaling: a 19 pt run on a 13.33-inch deck drew at 14.5 pt, not 14.25, and saved back as 19.33 pt | Fixed on main (#2407) |
+| A master's or layout's text box look, and its hidden shapes | A master or layout text box kept only its runs: a right-aligned classification label ("PROTECTED B") was drawn from its box's left edge, clear of the white patch each slide puts over it, and think-cell's hidden data shape drew as a broken picture in the corner (future-delivery-structure, every slide) | Open PR |
 | ODP flip and caps | Not read from ODP | Not started |
 
 ## Not gaps
