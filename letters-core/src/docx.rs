@@ -1461,6 +1461,16 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
             (!rows.is_empty()).then_some((ti as u32, rows))
         })
         .collect();
+    // Each table's heading: its leading rows marked `w:tblHeader`, which
+    // Word repeats at the top of every page the table runs on to.
+    let table_header_rows = tables
+        .iter()
+        .enumerate()
+        .filter_map(|(ti, t)| {
+            let n = (0..t.row_count()).take_while(|&r| t.row(r).is_some_and(|row| row.is_header())).count() as u32;
+            (n > 0).then_some((ti as u32, n))
+        })
+        .collect();
     // A table sized as a share of the text's width (`w:tblW w:type="pct"`).
     let table_relative = tables.iter().enumerate().filter(|(_, t)| matches!(t.width_mode(), Some(rdocx::TableWidth::Percentage(_)))).map(|(ti, _)| ti as u32).collect();
     let table_open_edges = tables.iter().enumerate().filter(|(ti, _)| !table_unruled.contains(&(*ti as u32))).filter_map(|(ti, t)| Some((ti as u32, cell_open_edges(t)?))).collect();
@@ -1502,6 +1512,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         table_rule_widths,
         table_rule_double,
         table_whole_rows,
+        table_header_rows,
         table_relative,
         table_open_edges,
         table_valign,
@@ -2222,6 +2233,11 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             for &r in doc.table_whole_rows.get(&tc0.table).into_iter().flatten() {
                 if let Some(mut row) = tbl.row(r as usize) {
                     row.set_cant_split();
+                }
+            }
+            for r in 0..doc.table_header_rows.get(&tc0.table).copied().unwrap_or(0) {
+                if let Some(mut row) = tbl.row(r as usize) {
+                    row.set_header();
                 }
             }
             if let Some(heights) = doc.table_rows.get(&tc0.table) {

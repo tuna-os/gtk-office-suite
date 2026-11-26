@@ -572,6 +572,9 @@ struct OpenTable {
     spans: Vec<CellSpan>,
     /// Each shaded cell's style attribute, by (row, col).
     cell_styles: std::collections::HashMap<(u32, u32), String>,
+    /// How many of its first rows are its heading
+    /// (`table:table-header-rows`).
+    header_rows: u32,
 }
 
 impl OpenTable {
@@ -597,8 +600,19 @@ impl OpenTable {
     }
 
     fn open_row(&self, body: &mut String) {
+        if self.row == 0 && self.header_rows > 0 {
+            body.push_str("<table:table-header-rows>");
+        }
         let style = self.row_styles.get(self.row as usize).map_or("", String::as_str);
         body.push_str(&format!("<table:table-row{style}>"));
+    }
+
+    /// Close the current row, and the heading after its last row.
+    fn close_row(&self, body: &mut String) {
+        body.push_str("</table:table-row>");
+        if self.header_rows > 0 && self.row + 1 == self.header_rows {
+            body.push_str("</table:table-header-rows>");
+        }
     }
 
     fn close_cell(&mut self, body: &mut String) {
@@ -620,7 +634,7 @@ impl OpenTable {
             if self.col + 1 < self.cols {
                 self.col += 1;
             } else {
-                body.push_str("</table:table-row>");
+                self.close_row(body);
                 self.row += 1;
                 self.col = 0;
                 if self.row == self.rows {
@@ -637,7 +651,7 @@ impl OpenTable {
         self.move_to(body, last_row, last_col);
         if self.row < self.rows {
             self.close_cell(body);
-            body.push_str("</table:table-row>");
+            self.close_row(body);
         }
         body.push_str("</table:table>");
     }
@@ -987,7 +1001,8 @@ fn content_xml(doc: &Document) -> String {
                         cell_styles.insert((row, col), format!(" table:style-name=\"{name}\""));
                     }
                     let spans = doc.table_spans.get(&c.table).cloned().unwrap_or_default();
-                    let mut t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles, spans };
+                    let header_rows = doc.table_header_rows.get(&c.table).copied().unwrap_or(0).min(rows);
+                    let mut t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles, spans, header_rows };
                     t.open_row(&mut body);
                     t.open_cell(&mut body);
                     table = Some(t);
@@ -3333,7 +3348,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_rule_double: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_rule_double: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_header_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -3760,6 +3775,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         t.2 = -1;
                         if in_header_rows || attr_val(&e, "table:style-name").is_some_and(|n| auto.row_whole.contains(&n) || named.row_whole.contains(&n)) {
                             doc.table_whole_rows.entry(t.0).or_default().insert(t.1 as u32);
+                        }
+                        if in_header_rows {
+                            *doc.table_header_rows.entry(t.0).or_default() += 1;
                         }
                         if let Some(h) = attr_val(&e, "table:style-name").and_then(|n| auto.row.get(&n).copied()) {
                             let heights = row_heights.entry(t.0).or_default();
@@ -5807,6 +5825,27 @@ mod tests {
         let d = read_package(content, "<office:document-styles/>");
         let id = d.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
         assert_eq!(d.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![0]));
+    }
+
+    /// A table's heading rows (`table:table-header-rows`) are read as its
+    /// repeated header and written back inside the element, the rows after
+    /// them outside it.
+    #[test]
+    fn heading_rows_round_trip() {
+        let content = "<office:document-content><office:body><office:text><table:table table:name=\"T\">\
+            <table:table-column/><table:table-header-rows><table:table-row><table:table-cell><text:p>head</text:p></table:table-cell></table:table-row></table:table-header-rows>\
+            <table:table-row><table:table-cell><text:p>body</text:p></table:table-cell></table:table-row></table:table>\
+            <text:p>after</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let id = d.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+        assert_eq!(d.table_header_rows.get(&id), Some(&1));
+        let mut two = Document::from_plain_text("after");
+        let table = two.insert_table_at(0, 3, 1);
+        two.table_header_rows.insert(table, 2);
+        let rt = round_trip(&two);
+        let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+        assert_eq!(rt.table_header_rows.get(&id), Some(&2));
+        assert!(round_trip(&Document::from_plain_text("after")).table_header_rows.is_empty());
     }
 
     /// A first page's master that names a different next master gives
