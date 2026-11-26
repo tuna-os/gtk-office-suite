@@ -1,0 +1,1 @@
+- Internal: a pull request that changes only the render lab (its baselines, scripts or fixtures) no longer runs the workspace build, tests, Flatpaks and GUI journeys, and a changelog fragment no longer makes a one-app change build every app's Flatpak.

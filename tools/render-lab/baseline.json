@@ -104,6 +104,9 @@
   "decks/table-text-panel": {
     "A": "green"
   },
+  "decks/text-columns": {
+    "A": "green"
+  },
   "decks/text-styles": {
     "A": "green",
     "B": "green",
@@ -430,7 +433,7 @@
     "C": "green"
   },
   "tables/filtered": {
-    "A": "amber",
+    "A": "green",
     "B": "amber",
     "C": "amber"
   },

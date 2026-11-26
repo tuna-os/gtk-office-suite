@@ -1,0 +1,1 @@
+- Decks: superscript and subscript text in a PowerPoint file is drawn smaller and raised or lowered, as PowerPoint and Impress draw it, and stays so on save. It used to be drawn full size on the line.
