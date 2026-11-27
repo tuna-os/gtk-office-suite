@@ -15,7 +15,7 @@ suite-common-core = { path = "../suite-common-core", version = "0.1.0" }
 suite-export = { path = "../suite-export", version = "0.1.0" }
 ironcalc_base = "0.9"
 calamine = "0.38"
-rust_xlsxwriter = "0.102"
+rust_xlsxwriter = "0.104"
 regex = "1"
 jiff = { version = "0.2", default-features = false, features = ["std"] }
 zip = "9.0"
