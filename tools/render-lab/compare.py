@@ -394,6 +394,59 @@ def page_bag(path):
     return Counter(text for text, *_ in ocr_pass(load(path).convert("L"), 2, "6"))
 
 
+def ink_box(img):
+    """The bounding box of a page's ink, or None for a blank page."""
+    ys, xs = np.nonzero(ink_mask(np.asarray(img)))
+    return (int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1) if len(xs) else None
+
+
+def stitch_sheet_strips(lo_pages, dest_png):
+    """One reference for a sheet LibreOffice split across the page width.
+
+    Calc prints a sheet wider than the paper in column strips, each strip
+    down the sheet before the next one starts (pages 1-2 column A, 3-4
+    column B, ...), while Tables draws one continuous grid (#1343). The
+    strip height is read from the pages: a strip's last page is the only one
+    shorter than the first. Each strip's first page is cropped to its ink and
+    set beside the others, top-aligned, in `dest_png` (its text layer goes
+    beside it). None when the pages do not fall into two or more equal
+    strips, so a sheet that is one strip, or an odd print, is scored as
+    before."""
+    n = len(lo_pages)
+    if n < 2:
+        return None
+    boxes = []
+    for lo in lo_pages:
+        try:
+            box = ink_box(load(lo))
+        except OSError:  # an unreadable page: score the sheet as before
+            return None
+        if box is None:
+            return None
+        boxes.append(box)
+    first_h = boxes[0][3] - boxes[0][1]
+    per = next((i for i, b in enumerate(boxes[1:], 2) if b[3] - b[1] < 0.9 * first_h), None)
+    if per is None or per == n or n % per:
+        return None
+    tops = list(range(0, n, per))
+    crops = [load(lo_pages[i]).crop(boxes[i]) for i in tops]
+    gap = 8
+    canvas = Image.new("RGB", (sum(c.width for c in crops) + gap * (len(crops) - 1), max(c.height for c in crops)), (255, 255, 255))
+    x = 0
+    for c in crops:
+        canvas.paste(c, (x, 0))
+        x += c.width + gap
+    canvas.save(dest_png)
+    text = ""
+    for i in tops:
+        txt = os.path.splitext(lo_pages[i])[0] + ".txt"
+        if os.path.exists(txt):
+            text += open(txt, encoding="utf-8", errors="replace").read()
+    with open(os.path.splitext(dest_png)[0] + ".txt", "w", encoding="utf-8") as f:
+        f.write(text)
+    return dest_png
+
+
 def pick_sheet_page(lo_pages, ours_path):
     """The printed page, among `lo_pages`, that starts our opening sheet:
     the first whose words are mostly (SHEET_CONTAINED) ours. A sheet too
@@ -445,8 +498,10 @@ def score_fixture(app, d, tier, ref_words_cache, feature=None):
         # shows it: the one, among the first pages, that shares the most
         # words with it (then the most structure).
         page_window = True
-        best = pick_sheet_page(lo_pages[:SHEET_CANDIDATES], ours_pages[0])
-        lo_page = page_no(best)
+        candidates = lo_pages[:SHEET_CANDIDATES]
+        stitched = stitch_sheet_strips(candidates, os.path.join(d, "lo-strips.png"))
+        best = pick_sheet_page(([stitched] if stitched else []) + candidates, ours_pages[0])
+        lo_page = None if best == stitched else page_no(best)
         lo_pages = [best]
     if partial:
         lo_pages = lo_pages[: len(ours_pages)]

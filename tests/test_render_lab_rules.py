@@ -1039,3 +1039,44 @@ class WideColumnRightAlignFixtureTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class StitchSheetStripsTest(unittest.TestCase):
+    """A sheet wider than the paper prints in column strips (#1343)."""
+
+    def pages(self, tmp, heights, widths):
+        import compare
+
+        paths = []
+        for i, (h, w) in enumerate(zip(heights, widths), 1):
+            img = Image.new("RGB", (400, 500), (255, 255, 255))
+            img.paste((0, 0, 0), (20, 20, 20 + w, 20 + h))
+            path = os.path.join(tmp, f"lo-{i}.png")
+            img.save(path)
+            paths.append(path)
+        return compare, paths
+
+    def test_strips_are_set_side_by_side(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # Three strips of two pages: the second page of each is short.
+            compare, paths = self.pages(tmp, [300, 100] * 3, [50, 50, 80, 80, 60, 60])
+            out = compare.stitch_sheet_strips(paths, os.path.join(tmp, "lo-strips.png"))
+            self.assertIsNotNone(out)
+            self.assertEqual(Image.open(out).size, (50 + 80 + 60 + 16, 300))
+
+    def test_a_single_strip_is_left_alone(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            compare, paths = self.pages(tmp, [300, 100], [50, 50])
+            self.assertIsNone(compare.stitch_sheet_strips(paths, os.path.join(tmp, "lo-strips.png")))
+
+    def test_uneven_page_counts_are_left_alone(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            compare, paths = self.pages(tmp, [300, 100, 300], [50, 50, 80])
+            self.assertIsNone(compare.stitch_sheet_strips(paths, os.path.join(tmp, "lo-strips.png")))
