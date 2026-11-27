@@ -47,9 +47,9 @@ lower the claim's status or relax the rule.
 
 ## Automatic releases
 
-`.github/workflows/autorelease.yml` cuts a release after a merge to `main`
-(a patch bump; documentation-only changes do not count) and every Wednesday
-(a minor bump) when `main` has changed since the last tag, and on demand
+`.github/workflows/autorelease.yml` cuts a release every day at 07:41 UTC
+when `main` has changed since the last tag (a patch bump, and a minor bump on
+Wednesdays), and on demand
 (`workflow_dispatch`: `bump` = minor, patch or major; `force` to release
 an unchanged `main`):
 
@@ -96,6 +96,10 @@ release-critical test that failed, was skipped, or is simply absent from
 those reports refuses the release, and so does an inventory recorded at any
 other revision. A release-critical claim citing a test outside those lanes is
 refused on every pull request already (SH-001).
+
+Publishing releases share one concurrency group in `publish-flatpak.yml`. A
+running release always finishes; a newer release replaces one that is still
+waiting, so only the newest tag runs the soak.
 
 ## Upgrade and recovery policy
 
