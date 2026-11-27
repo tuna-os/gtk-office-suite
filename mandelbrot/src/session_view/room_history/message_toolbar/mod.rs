@@ -4,13 +4,8 @@ use adw::{prelude::*, subclass::prelude::*};
 use futures_util::{StreamExt, future, lock::Mutex, pin_mut};
 use gettextrs::{gettext, pgettext};
 use gtk::{gdk, gio, glib, glib::clone};
-use matrix_sdk::{
-    attachment::{AttachmentInfo, BaseAudioInfo, BaseFileInfo, Thumbnail},
-    room::edit::EditedContent,
-};
-use matrix_sdk_ui::timeline::{
-    AttachmentConfig, AttachmentSource, TimelineEventItemId, TimelineItemContent,
-};
+use matrix_sdk::attachment::{AttachmentInfo, BaseAudioInfo, Thumbnail};
+use matrix_sdk_ui::timeline::{AttachmentSource, TimelineEventItemId, TimelineItemContent};
 use ruma::events::{
     AnyMessageLikeEventContent, Mentions,
     room::{
@@ -21,12 +16,15 @@ use ruma::events::{
 use tracing::{debug, error, warn};
 
 mod attachment_dialog;
+mod attachment_info;
 mod completion;
 mod composer_parser;
 mod composer_state;
 mod create_poll_dialog;
+mod outgoing_content;
 
 pub(crate) use self::composer_state::{ComposerState, MessageEventSource, RelationInfo};
+use self::outgoing_content::SendFailure;
 use self::{
     attachment_dialog::AttachmentDialog, completion::CompletionPopover,
     composer_parser::ComposerParser, create_poll_dialog::CreatePollDialog,
@@ -43,11 +41,9 @@ use crate::{
         Location, LocationError, TemplateCallbacks, TokioDrop,
         media::{
             FileInfo,
-            audio::load_audio_info,
             audio_recorder::{AudioRecorder, AudioRecorderError, MAX_RECORDING_DURATION},
             filename_for_mime,
             image::ImageInfoLoader,
-            video::load_video_info,
         },
     },
 };
@@ -791,50 +787,16 @@ mod imp {
                 return;
             };
 
-            let matrix_timeline = timeline.matrix_timeline();
-
-            // Send event depending on relation.
-            match composer_state.related_to() {
-                Some(RelationInfo::Reply(message_event)) => {
-                    let event_id = message_event.event_id();
-
-                    let handle =
-                        spawn_tokio!(
-                            async move { matrix_timeline.send_reply(content, event_id).await }
-                        );
-
-                    if let Err(error) = handle.await.expect("task was not aborted") {
-                        error!("Could not send reply: {error}");
-                        toast!(self.obj(), gettext("Could not send reply"));
-                    }
-                }
-                Some(RelationInfo::Edit(event_id)) => {
-                    let matrix_room = timeline.room().matrix_room().clone();
-                    let handle = spawn_tokio!(async move {
-                        let full_content = matrix_room
-                            .make_edit_event(&event_id, EditedContent::RoomMessage(content))
-                            .await
-                            .map_err(matrix_sdk_ui::timeline::EditError::from)?;
-                        let send_queue = matrix_room.send_queue();
-                        send_queue.send(full_content).await?;
-                        Ok::<(), matrix_sdk_ui::timeline::Error>(())
-                    });
-                    if let Err(error) = handle.await.unwrap() {
-                        error!("Could not send edit: {error}");
-                        toast!(self.obj(), gettext("Could not send edit"));
-                    }
-                }
-                _ => {
-                    let handle = spawn_tokio!(async move {
-                        matrix_timeline
-                            .send(content.with_relation(None).into())
-                            .await
-                    });
-                    if let Err(error) = handle.await.unwrap() {
-                        error!("Could not send message: {error}");
-                        toast!(self.obj(), gettext("Could not send message"));
-                    }
-                }
+            if let Err(failure) =
+                outgoing_content::send_message(&timeline, content, composer_state.related_to())
+                    .await
+            {
+                let message = match failure {
+                    SendFailure::Reply => gettext("Could not send reply"),
+                    SendFailure::Edit => gettext("Could not send edit"),
+                    SendFailure::Message => gettext("Could not send message"),
+                };
+                toast!(self.obj(), message);
             }
 
             // Clear the composer state.
@@ -1046,23 +1008,10 @@ mod imp {
             info: AttachmentInfo,
             thumbnail: Option<Thumbnail>,
         ) {
-            let config = AttachmentConfig {
-                info: Some(info),
-                thumbnail,
-                ..Default::default()
-            };
-
-            let matrix_timeline = timeline.matrix_timeline();
-
-            let handle = spawn_tokio!(async move {
-                matrix_timeline
-                    .send_attachment(source, mime, config)
-                    .use_send_queue()
-                    .await
-            });
-
-            if let Err(error) = handle.await.unwrap() {
-                error!("Could not send file: {error}");
+            if outgoing_content::send_attachment(timeline, source, mime, info, thumbnail)
+                .await
+                .is_err()
+            {
                 toast!(self.obj(), gettext("Could not send file"));
             }
 
@@ -1325,28 +1274,8 @@ mod imp {
                 return;
             }
 
-            let size = file_info.size.map(Into::into);
-            let (info, thumbnail) = match file_info.mime.type_() {
-                mime::IMAGE => {
-                    let (mut info, thumbnail) = ImageInfoLoader::from(file)
-                        .load_info_and_thumbnail(file_info.size, &*obj)
-                        .await;
-                    info.size = size;
-
-                    (AttachmentInfo::Image(info), thumbnail)
-                }
-                mime::VIDEO => {
-                    let (mut info, thumbnail) = load_video_info(&file, &*obj).await;
-                    info.size = size;
-                    (AttachmentInfo::Video(info), thumbnail)
-                }
-                mime::AUDIO => {
-                    let mut info = load_audio_info(&file).await;
-                    info.size = size;
-                    (AttachmentInfo::Audio(info), None)
-                }
-                _ => (AttachmentInfo::File(BaseFileInfo { size }), None),
-            };
+            let (info, thumbnail) =
+                attachment_info::load_attachment_info(&file, &file_info, &*obj).await;
 
             self.send_attachment(path.into(), file_info.mime, info, thumbnail)
                 .await;
