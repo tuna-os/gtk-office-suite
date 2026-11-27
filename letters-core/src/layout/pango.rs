@@ -889,7 +889,7 @@ impl Typeset {
             };
             for item in &page.items {
                 match item {
-                    Item::Line { source: Source::Paragraph(p), .. }
+                    Item::Line { source: Source::Paragraph(p) | Source::Repeat(p), .. }
                     | Item::Marker { para: p, .. }
                     | Item::Chip { para: p, .. }
                     | Item::NoteRef { para: p, .. } => {
@@ -1413,7 +1413,7 @@ impl Typeset {
         }
         for item in &page.items {
             match item {
-                Item::Line { source: Source::Paragraph(p), line, box_width_pt, x_pt, baseline_pt, .. } => {
+                Item::Line { source: Source::Paragraph(p) | Source::Repeat(p), line, box_width_pt, x_pt, baseline_pt, .. } => {
                     let Some(layout) = self.paragraph_layout(*p, *box_width_pt) else { continue };
                     if let Some(l) = layout.line_readonly(*line as i32) {
                         cr.move_to(*x_pt, *baseline_pt);

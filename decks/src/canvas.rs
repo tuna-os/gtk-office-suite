@@ -6,6 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use decks_core::engine::{BackgroundPicture, Slide, SlideObject, MasterSlide};
 use decks_core::engine::Run;
+use decks_core::engine::VertAlign;
 
 // ── Image loading with cache ─────────────────────────────────────────
 
@@ -497,12 +498,30 @@ pub fn set_styled_text(
         }
         // The exact size where the reader kept one (a 19 pt run on a
         // 13.33-inch deck is 14.25 pt here, not the 14.5 its half points say).
-        if let Some(pt) = run.style.size_pt() {
-            let pt = pt * scale;
-            add(pango::AttrSize::new_size_absolute(
-                (pt * 96.0 / 72.0 * pango::SCALE as f64) as i32,
-            )
-            .into());
+        // A superscript or subscript run is drawn as Impress draws one
+        // from a pptx: at 58% of its size (`DFLT_ESC_PROP`), raised a
+        // third of that size or lowered a quarter of it. Drawn full size, a data table's
+        // superscript labels were too big for their boxes and wrapped
+        // (dashboard-overpayment-project-2019's "CIRN / AC").
+        let full = run.style.size_pt().map(|pt| pt * scale * 96.0 / 72.0 * pango::SCALE as f64).or_else(|| base_size(layout));
+        match (run.style.vert_align, full) {
+            (Some(v), Some(full)) => {
+                add(pango::AttrSize::new_size_absolute((full * ESCAPED_SIZE) as i32).into());
+                let rise = match v {
+                    VertAlign::Superscript => SUPERSCRIPT_RISE,
+                    VertAlign::Subscript => -SUBSCRIPT_DROP,
+                };
+                add(pango::AttrInt::new_rise((full * rise) as i32).into());
+            }
+            _ => {
+                if let Some(pt) = run.style.size_pt() {
+                    let pt = pt * scale;
+                    add(pango::AttrSize::new_size_absolute(
+                        (pt * 96.0 / 72.0 * pango::SCALE as f64) as i32,
+                    )
+                    .into());
+                }
+            }
         }
         // The run's own colour. The readers have always stored it (pptx
         // a:rPr solidFill, odp fo:color) and the writers write it back,
@@ -515,6 +534,25 @@ pub fn set_styled_text(
     hang_trailing_spaces(&attrs, &buf);
     layout.set_text(&buf);
     layout.set_attributes(Some(&attrs));
+}
+
+/// A superscript's or subscript's size, as a share of its run's
+/// (Impress's `DFLT_ESC_PROP`, which its pptx import gives every shifted
+/// run), and how far each is raised or lowered, as a share of the full
+/// size. Impress shifts a run as far as its `baseline` says; the model
+/// keeps only the direction, so these are the shifts PowerPoint's own
+/// superscript and subscript come close to (a third up; its subscript's
+/// `baseline="-25000"`, which the writer writes, down).
+const ESCAPED_SIZE: f64 = 0.58;
+const SUPERSCRIPT_RISE: f64 = 0.33;
+const SUBSCRIPT_DROP: f64 = 0.25;
+
+/// The layout's base font size in absolute Pango units (device pixels
+/// times `pango::SCALE`), for a run that has no size of its own.
+fn base_size(layout: &pango::Layout) -> Option<f64> {
+    let desc = layout.font_description()?;
+    let size = f64::from(desc.size());
+    (size > 0.0).then(|| if desc.is_size_absolute() { size } else { size * 96.0 / 72.0 })
 }
 
 /// Spaces that end a paragraph take no room: PowerPoint and Impress let
@@ -983,16 +1021,18 @@ pub fn draw_object(
                     reversed: chart.reversed,
                     percent: chart.percent,
                     text_color: chart.text_color.map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
-                    // Hundredths of a point; the chart is drawn in the
-                    // slide's own units, which are points.
-                    text_px: chart.text_size.map(|v| v as f64 / 100.0),
+                    // Hundredths of a point on the model's slide (the
+                    // reader scaled the file's), in the model's units
+                    // of 96 to the inch.
+                    text_px: chart.text_size.map(|v| v as f64 / 100.0 * 96.0 / 72.0),
                     series_colors: &series_colors,
                     gap: chart.gap.map(f64::from),
                     hide_category_axis: chart.hide_category_axis,
                     title: chart.title.as_ref().map(|t| t.text.as_str()),
-                    title_px: chart.title.as_ref().and_then(|t| t.size).map(|v| v as f64 / 100.0),
+                    title_px: chart.title.as_ref().and_then(|t| t.size).map(|v| v as f64 / 100.0 * 96.0 / 72.0),
                     title_bold: chart.title.as_ref().is_some_and(|t| t.bold),
                     title_color: chart.title.as_ref().and_then(|t| t.color).map(|[r, g, b]| (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0)),
+                    label_texts: &chart.label_texts,
                 };
                 suite_common::charts::draw_chart_with(cr, &categories, &series, chart.kind, w, h, &opts);
             } else {
@@ -2091,6 +2131,33 @@ mod font_tests {
         assert_eq!(fam.len(), 1);
         assert_eq!(fam[0].downcast_ref::<pango::AttrString>().unwrap().value().as_str(), "Liberation Serif");
         assert_eq!((fam[0].start_index(), fam[0].end_index()), (6, 11));
+    }
+
+    /// A superscript or subscript run is drawn as Impress draws one: at
+    /// 58% of its size, raised a third of its size or lowered a quarter,
+    /// whether it states its size or takes the layout's.
+    #[test]
+    fn a_shifted_run_is_drawn_smaller_and_raised_or_lowered() {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 10, 10).unwrap();
+        let cr = cairo::Context::new(&surface).unwrap();
+        let px = |pt: f64| pt * 96.0 / 72.0 * pango::SCALE as f64;
+        for (own, base) in [(Some(20), None), (None, Some(10.0))] {
+            let layout = pangocairo::functions::create_layout(&cr);
+            if let Some(pt) = base {
+                let mut desc = pango::FontDescription::from_string("Sans");
+                desc.set_size((pt * pango::SCALE as f64) as i32);
+                layout.set_font_description(Some(&desc));
+            }
+            let style = |v| RunStyle { font_size_hp: own, vert_align: Some(v), ..Default::default() };
+            let runs = vec![Run { text: "up".into(), style: style(VertAlign::Superscript) }, Run { text: "down".into(), style: style(VertAlign::Subscript) }];
+            set_styled_text(&layout, "updown", &runs, 1.0);
+            let attrs = layout.attributes().expect("attributes set").attributes();
+            let full = px(own.map_or(10.0, |hp| f64::from(hp) / 2.0));
+            let sizes: Vec<i32> = attrs.iter().filter(|a| a.type_() == pango::AttrType::AbsoluteSize).map(|a| a.downcast_ref::<pango::AttrSize>().unwrap().size()).collect();
+            assert_eq!(sizes, [(full * 0.58) as i32; 2], "{own:?} {base:?}");
+            let rises: Vec<i32> = attrs.iter().filter(|a| a.type_() == pango::AttrType::Rise).map(|a| a.downcast_ref::<pango::AttrInt>().unwrap().value()).collect();
+            assert_eq!(rises, [(full * 0.33) as i32, (full * -0.25) as i32], "{own:?} {base:?}");
+        }
     }
 
     /// A run in capitals or small capitals is drawn so, whatever case it

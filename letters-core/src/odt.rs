@@ -482,7 +482,7 @@ fn floating_style(name: &str, a: &crate::model::ImageAnchor) -> String {
     format!(
         "<style:style style:name=\"{name}\" style:family=\"graphic\"><style:graphic-properties style:wrap=\"{}\" \
          style:run-through=\"{}\" style:horizontal-pos=\"{}\" style:horizontal-rel=\"{}\" style:vertical-pos=\"{}\" \
-         style:vertical-rel=\"{}\"/></style:style>",
+         style:vertical-rel=\"{}\"{}/></style:style>",
         match a.wrap {
             crate::model::Wrap::None => "run-through",
             crate::model::Wrap::Parallel => "parallel",
@@ -493,6 +493,7 @@ fn floating_style(name: &str, a: &crate::model::ImageAnchor) -> String {
         rel(a.h_from),
         pos(a.v_align, ["from-top", "top", "middle", "bottom"]),
         rel(a.v_from),
+        if a.contour { " style:wrap-contour=\"true\" style:wrap-contour-mode=\"full\"" } else { "" },
     )
 }
 
@@ -524,6 +525,7 @@ fn graphic_placement(e: &quick_xml::events::BytesStart<'_>) -> crate::model::Ima
             Some("none") => crate::model::Wrap::TopBottom,
             _ => crate::model::Wrap::None,
         },
+        contour: attr_val(e, "style:wrap-contour").as_deref() == Some("true"),
         ..Default::default()
     }
 }
@@ -572,6 +574,9 @@ struct OpenTable {
     spans: Vec<CellSpan>,
     /// Each shaded cell's style attribute, by (row, col).
     cell_styles: std::collections::HashMap<(u32, u32), String>,
+    /// How many of its first rows are its heading
+    /// (`table:table-header-rows`).
+    header_rows: u32,
 }
 
 impl OpenTable {
@@ -597,8 +602,19 @@ impl OpenTable {
     }
 
     fn open_row(&self, body: &mut String) {
+        if self.row == 0 && self.header_rows > 0 {
+            body.push_str("<table:table-header-rows>");
+        }
         let style = self.row_styles.get(self.row as usize).map_or("", String::as_str);
         body.push_str(&format!("<table:table-row{style}>"));
+    }
+
+    /// Close the current row, and the heading after its last row.
+    fn close_row(&self, body: &mut String) {
+        body.push_str("</table:table-row>");
+        if self.header_rows > 0 && self.row + 1 == self.header_rows {
+            body.push_str("</table:table-header-rows>");
+        }
     }
 
     fn close_cell(&mut self, body: &mut String) {
@@ -620,7 +636,7 @@ impl OpenTable {
             if self.col + 1 < self.cols {
                 self.col += 1;
             } else {
-                body.push_str("</table:table-row>");
+                self.close_row(body);
                 self.row += 1;
                 self.col = 0;
                 if self.row == self.rows {
@@ -637,7 +653,7 @@ impl OpenTable {
         self.move_to(body, last_row, last_col);
         if self.row < self.rows {
             self.close_cell(body);
-            body.push_str("</table:table-row>");
+            self.close_row(body);
         }
         body.push_str("</table:table>");
     }
@@ -987,7 +1003,8 @@ fn content_xml(doc: &Document) -> String {
                         cell_styles.insert((row, col), format!(" table:style-name=\"{name}\""));
                     }
                     let spans = doc.table_spans.get(&c.table).cloned().unwrap_or_default();
-                    let mut t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles, spans };
+                    let header_rows = doc.table_header_rows.get(&c.table).copied().unwrap_or(0).min(rows);
+                    let mut t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles, spans, header_rows };
                     t.open_row(&mut body);
                     t.open_cell(&mut body);
                     table = Some(t);
@@ -1490,7 +1507,11 @@ fn styles_xml(doc: &Document) -> String {
             .enumerate()
             .map(|(k, line)| {
                 let name = format!("{prefix}{}", k + 1);
-                let align = match line.alignment {
+                // A line in a box that keeps its width is set inside the
+                // box by its own alignment; the box goes across the page.
+                let boxed = line.float.and(line.float_width_pt).filter(|w| w.is_finite() && *w > 0.0);
+                let text_align = if boxed.is_some() { line.float_text_alignment } else { line.alignment };
+                let align = match text_align {
                     Alignment::Left => "",
                     Alignment::Center => " fo:text-align=\"center\"",
                     Alignment::Right => " fo:text-align=\"end\"",
@@ -1523,7 +1544,12 @@ fn styles_xml(doc: &Document) -> String {
                         "<style:style style:name=\"{name}Box\" style:family=\"graphic\"><style:graphic-properties style:vertical-pos=\"{v_pos}\" style:vertical-rel=\"page\" style:horizontal-pos=\"{h_pos}\" style:horizontal-rel=\"page\" fo:padding-top=\"{top:.2}pt\" fo:padding-bottom=\"{bottom:.2}pt\" fo:padding-left=\"0pt\" fo:padding-right=\"0pt\" fo:border=\"none\" draw:stroke=\"none\" draw:fill=\"none\" draw:textarea-vertical-align=\"{v_pos}\" style:wrap=\"run-through\" style:run-through=\"foreground\"/></style:style>"
                     ));
                     let height = line.look.font_size_hp.map_or(12.0, |hp| f64::from(hp) / 2.0) * 1.25 + top + bottom;
-                    format!("<draw:frame draw:style-name=\"{name}Box\" draw:name=\"{name}Box\" text:anchor-type=\"paragraph\" svg:width=\"{page_w:.2}pt\" svg:height=\"{height:.2}pt\" draw:z-index=\"0\"><draw:text-box>")
+                    // A box that keeps its width is that wide; any other
+                    // spans the page and grows (`fo:min-width`).
+                    match boxed {
+                        Some(w) => format!("<draw:frame draw:style-name=\"{name}Box\" draw:name=\"{name}Box\" text:anchor-type=\"paragraph\" svg:width=\"{w:.2}pt\" svg:height=\"{height:.2}pt\" draw:z-index=\"0\"><draw:text-box>"),
+                        None => format!("<draw:frame draw:style-name=\"{name}Box\" draw:name=\"{name}Box\" text:anchor-type=\"paragraph\" svg:width=\"{page_w:.2}pt\" svg:height=\"{height:.2}pt\" draw:z-index=\"0\"><draw:text-box fo:min-width=\"{page_w:.2}pt\">"),
+                    }
                 });
                 (format!(" text:style-name=\"{name}\""), frame)
             })
@@ -1769,9 +1795,14 @@ struct AutoStyles {
     /// Table styles' `fo:margin-left`, in points: how far right of the
     /// text's edge the table's edge sits.
     table_margin: std::collections::HashMap<String, f64>,
+    /// Table styles set centred or against the right margin
+    /// (`table:align`), whose left edge depends on the text's width.
+    table_off_left: std::collections::HashSet<String>,
     /// A graphic style's padding above and below its text, in points: a
     /// text box's inset.
     graphic_padding: std::collections::HashMap<String, (f64, f64)>,
+    /// A graphic style's left and right padding, in points.
+    graphic_padding_x: std::collections::HashMap<String, (f64, f64)>,
     /// A graphic style's room left and right of its frame, in points
     /// (`fo:margin-left`, `fo:margin-right`).
     graphic_sides: std::collections::HashMap<String, (f64, f64)>,
@@ -1906,6 +1937,85 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
     out
 }
 
+/// Where a list level's label face is named: in the level's own
+/// `style:text-properties`, or by the text style it names
+/// (`text:style-name`, Writer's "Bullet Symbols" and the like).
+#[derive(Clone, Debug, PartialEq)]
+enum LabelFace {
+    Own(String),
+    Style(String),
+}
+
+/// Each `text:list-style` in `xml`: where each level names its label's
+/// face (`LabelFace`), by level, 0-based. The level's own text properties
+/// win over its text style's.
+fn list_style_faces(xml: &str) -> std::collections::HashMap<String, Vec<Option<LabelFace>>> {
+    let mut out: std::collections::HashMap<String, Vec<Option<LabelFace>>> = Default::default();
+    let mut reader = Reader::from_str(xml);
+    let mut current: Option<String> = None;
+    let mut level: Option<usize> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "text:list-style" => current = attr_val(&e, "style:name"),
+                "text:list-level-style-number" | "text:list-level-style-bullet" | "text:list-level-style-image" => {
+                    level = attr_val(&e, "text:level").and_then(|l| l.parse::<usize>().ok()).filter(|l| (1..=10).contains(l));
+                    let (Some(style), Some(l)) = (current.as_ref(), level) else { continue };
+                    let levels = out.entry(style.clone()).or_default();
+                    if levels.len() < l {
+                        levels.resize(l, None);
+                    }
+                    levels[l - 1] = attr_val(&e, "text:style-name").map(LabelFace::Style);
+                }
+                "style:text-properties" => {
+                    let (Some(style), Some(l)) = (current.as_ref(), level) else { continue };
+                    let face = attr_val(&e, "style:font-name").or_else(|| attr_val(&e, "fo:font-family"));
+                    if let (Some(face), Some(levels)) = (face, out.get_mut(style)) {
+                        levels[l - 1] = Some(LabelFace::Own(face));
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                "text:list-style" => current = None,
+                "text:list-level-style-number" | "text:list-level-style-bullet" | "text:list-level-style-image" => level = None,
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Each `style:font-face` in `xml`: its family by its name.
+fn font_face_families(xml: &str) -> std::collections::HashMap<String, String> {
+    let mut out: std::collections::HashMap<String, String> = Default::default();
+    let mut reader = Reader::from_str(xml);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "style:font-face" => {
+                if let (Some(n), Some(f)) = (attr_val(&e, "style:name"), attr_val(&e, "svg:font-family")) {
+                    out.insert(n, f.trim_matches(|c| c == '\'' || c == '"').to_string());
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    out
+}
+
+/// A label face the model keeps: not a symbol face. Writer's OpenSymbol
+/// and Word's Symbol, Wingdings and Webdings hold their bullets at
+/// private-use points the reader already maps to Unicode glyphs
+/// (`docx::level_font` leaves the same faces out).
+fn kept_label_face(face: String) -> Option<String> {
+    let lower = face.trim().to_ascii_lowercase();
+    let symbol = ["symbol", "wingdings", "webdings", "opensymbol", "starsymbol"].iter().any(|s| lower.starts_with(s));
+    (!symbol && !lower.is_empty()).then_some(face)
+}
+
 /// One list level's position: (where its text starts, how far its marker
 /// hangs before that text), see `list_style_indents`.
 type ListLevelIndent = Option<(f64, Option<f64>)>;
@@ -1956,7 +2066,7 @@ fn list_style_indents(xml: &str) -> ListIndentMap {
 const DEFAULT_PARA: &str = "\u{0}default-paragraph";
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), para_text: Default::default(), kerning: Default::default(), text_shift: Default::default(), para_shift: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_rule_double: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_padding_x: Default::default(), graphic_sides: Default::default(), graphic_box: Default::default(), table_relative: Default::default(), table_margin: Default::default(), table_off_left: Default::default(), para_text: Default::default(), kerning: Default::default(), text_shift: Default::default(), para_shift: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_rule_color: Default::default(), cell_rule_width: Default::default(), cell_rule_double: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1992,6 +2102,7 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                             out.graphic.insert(name.clone(), graphic_placement(&e));
                             let pad = |a: &str| attr_val(&e, a).or_else(|| attr_val(&e, "fo:padding")).and_then(|v| parse_length_pt(&v)).unwrap_or(0.0);
                             out.graphic_padding.insert(name.clone(), (pad("fo:padding-top"), pad("fo:padding-bottom")));
+                            out.graphic_padding_x.insert(name.clone(), (pad("fo:padding-left"), pad("fo:padding-right")));
                             let side = |a: &str| attr_val(&e, a).and_then(|v| parse_length_pt(&v)).filter(|v| v.is_finite() && *v > 0.0).unwrap_or(0.0);
                             out.graphic_sides.insert(name.clone(), (side("fo:margin-left"), side("fo:margin-right")));
                             out.graphic_box.insert(name, box_look(&e));
@@ -2001,6 +2112,9 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                         if let Some(name) = cur_name.clone() {
                             if let Some(m) = attr_val(&e, "fo:margin-left").and_then(|v| parse_length_pt(&v)).filter(|m| m.is_finite()) {
                                 out.table_margin.insert(name.clone(), m);
+                            }
+                            if matches!(attr_val(&e, "table:align").as_deref(), Some("center" | "right")) {
+                                out.table_off_left.insert(name.clone());
                             }
                             if attr_val(&e, "style:rel-width").is_some() || attr_val(&e, "table:align").as_deref() == Some("margins") {
                                 out.table_relative.insert(name);
@@ -2316,6 +2430,10 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     _ => {}
                 }
             }
+            // A style's properties end with it: a list style's level text
+            // properties after it (Writer writes the list styles last) are
+            // not that style's face.
+            Ok(Event::End(e)) if matches!(e.name().as_ref(), "style:style" | "style:default-style") => cur_name = None,
             Ok(Event::Eof) => break,
             Err(_) => break,
             _ => {}
@@ -2494,6 +2612,8 @@ struct HfBox {
     lines: Vec<(String, crate::model::HfLine, bool)>,
     float: Option<crate::model::HfFloat>,
     across: Option<Alignment>,
+    /// The width its text has, when the box keeps its width.
+    width: Option<f64>,
 }
 
 /// Text of a header's or footer's text box added to its last line (a
@@ -2524,6 +2644,12 @@ fn finish_hf_box(b: HfBox, text: &mut Option<String>, lines: &mut Vec<crate::mod
         .filter(|(t, ..)| !t.trim().is_empty())
         .map(|(t, mut line, _)| {
             line.float = b.float;
+            // A box that keeps its width sets its text inside it by the
+            // paragraph's own alignment; the box goes across the page.
+            if let Some(w) = b.width.filter(|_| b.float.is_some()) {
+                line.float_width_pt = Some(w);
+                line.float_text_alignment = line.alignment;
+            }
             if let Some(a) = b.across {
                 line.alignment = a;
             }
@@ -3312,6 +3438,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     list_labels.extend(list_style_labels(&content));
     let mut list_indents = list_style_indents(&styles);
     list_indents.extend(list_style_indents(&content));
+    let mut list_faces = list_style_faces(&styles);
+    list_faces.extend(list_style_faces(&content));
+    let mut face_families = font_face_families(&styles);
+    face_families.extend(font_face_families(&content));
     // The label of a numbered item at `level` (1-based) of the list style
     // `name`.
     let label_of = |name: Option<&String>, level: u8| -> Option<ListLabel> {
@@ -3333,7 +3463,16 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_rule_double: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
+    // The face list style `name` draws its level `level` (1-based) label
+    // in, when it names one the model keeps (`kept_label_face`).
+    let label_face = |name: &String, level: u8| -> Option<String> {
+        let face = match list_faces.get(name)?.get(usize::from(level.checked_sub(1)?))?.as_ref()? {
+            LabelFace::Own(face) => face.clone(),
+            LabelFace::Style(style) => auto.text_font_name.get(style).or_else(|| named.text_font_name.get(style))?.clone(),
+        };
+        kept_label_face(face_families.get(&face).cloned().unwrap_or(face))
+    };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), header_lines: Vec::new(), footer_lines: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), sections: Vec::new(), next_section_id: 0, table_padding: Default::default(), table_unruled: Default::default(), table_rule_colors: Default::default(), table_rule_widths: Default::default(), table_rule_double: Default::default(), table_relative: Default::default(), table_open_edges: Default::default(), table_valign: Default::default(), table_whole_rows: Default::default(), table_header_rows: Default::default(), table_indent: Default::default(), first_header: None, first_footer: None, space_adds: true };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -3761,6 +3900,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         if in_header_rows || attr_val(&e, "table:style-name").is_some_and(|n| auto.row_whole.contains(&n) || named.row_whole.contains(&n)) {
                             doc.table_whole_rows.entry(t.0).or_default().insert(t.1 as u32);
                         }
+                        if in_header_rows {
+                            *doc.table_header_rows.entry(t.0).or_default() += 1;
+                        }
                         if let Some(h) = attr_val(&e, "table:style-name").and_then(|n| auto.row.get(&n).copied()) {
                             let heights = row_heights.entry(t.0).or_default();
                             heights.resize(t.1 as usize, None);
@@ -3963,6 +4105,13 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     style.list_level = list_level.saturating_sub(1);
                     style.list_start = pending_start.take();
                     style.list_label = label;
+                    style.list_label_font = (kind != ListKind::None)
+                        .then(|| {
+                            let own = item_styles.get(usize::from(list_level.max(1) - 1)).cloned().flatten();
+                            let name = own.as_ref().or_else(|| list_style_names.last().and_then(Option::as_ref))?;
+                            label_face(name, list_level)
+                        })
+                        .flatten();
                     // Where the list style puts the item's text, unless the
                     // paragraph places it itself: the model's indent is
                     // that less the list indent the layout adds (as for a
@@ -4509,6 +4658,17 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         // they sit side by side; a later cell's text follows a space.
         let mut hf_row: Option<bool> = None;
         let mut hf_cell_gap = false;
+        // The header's or footer's table being read: its left edge from the
+        // text's margin and its columns' widths (None for one whose edge
+        // depends on the text's width, or a column of no width), the next
+        // cell's column, the box of the cell being read, and whether a
+        // second cell of the row has text (the row then reads as one line
+        // across the whole width, as before).
+        let mut hf_table: Option<(f64, Vec<f64>)> = None;
+        let mut hf_col = 0usize;
+        let mut hf_cell: Option<crate::model::HfCell> = None;
+        let mut hf_row_joined = false;
+        let mut hf_row_text = false;
         // The spans open in the document's header or footer, and whether
         // its line being read has taken its first text's look yet.
         let mut hf_spans: Vec<Option<String>> = Vec::new();
@@ -4517,6 +4677,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         // and where the frame around a text box places it.
         let mut hf_box: Option<HfBox> = None;
         let mut hf_frame_place: (Option<crate::model::HfFloat>, Option<Alignment>) = (None, None);
+        // The text width of the header's or footer's frame being read:
+        // its `svg:width` less its side padding (Writer keeps a text
+        // frame that wide unless its text box sets a minimum width).
+        let mut hf_frame_width: Option<f64> = None;
         let para_alignment = |name: &str| -> Alignment {
             let mut cur = Some(name.to_string());
             for _ in 0..8 {
@@ -4661,6 +4825,39 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     in_master = false;
                     cur_master = None;
                 }
+                // A header's or footer's table: where each cell is, so a
+                // row's line is set in the cell its text is in.
+                Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                    if (in_header || in_footer) && hf_box_depth == 0 && matches!(e.name().as_ref(), "table:table" | "table:table-column" | "table:table-cell" | "table:covered-table-cell") =>
+                {
+                    let style = attr_val(&e, "table:style-name");
+                    match e.name().as_ref() {
+                        "table:table" => {
+                            let off = style.as_ref().is_some_and(|n| named.table_off_left.contains(n));
+                            let left = style.as_ref().and_then(|n| named.table_margin.get(n)).copied().unwrap_or(0.0);
+                            hf_table = (!off).then(|| (left, Vec::new()));
+                        }
+                        "table:table-column" => {
+                            let width = style.as_ref().and_then(|n| named.column.get(n)).copied().filter(|w| w.is_finite() && *w > 0.0);
+                            let repeat = attr_val(&e, "table:number-columns-repeated").and_then(|n| n.parse::<usize>().ok()).unwrap_or(1).clamp(1, 64);
+                            match (hf_table.as_mut(), width) {
+                                (Some((_, cols)), Some(w)) => cols.extend(std::iter::repeat_n(w, repeat)),
+                                _ => hf_table = None,
+                            }
+                        }
+                        "table:table-cell" => {
+                            let span = attr_val(&e, "table:number-columns-spanned").and_then(|n| n.parse::<usize>().ok()).unwrap_or(1).max(1);
+                            hf_cell = hf_table.as_ref().filter(|(_, cols)| hf_col + span <= cols.len()).map(|(left, cols)| {
+                                let pad = style.as_ref().and_then(|n| named.cell_padding.get(n)).copied().unwrap_or_default();
+                                let x = left + cols[..hf_col].iter().sum::<f64>();
+                                let w: f64 = cols[hf_col..hf_col + span].iter().sum();
+                                crate::model::HfCell { left_pt: x + pad.left_pt, width_pt: (w - pad.left_pt - pad.right_pt).max(1.0) }
+                            });
+                            hf_col += span;
+                        }
+                        _ => hf_col += 1,
+                    }
+                }
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "draw:frame" && (in_header || in_footer) => {
                     let size = |a: &str| attr_val(&e, a).as_deref().and_then(length_emu);
                     let floating = attr_val(&e, "text:anchor-type").is_some_and(|t| matches!(t.as_str(), "paragraph" | "char" | "page"));
@@ -4674,6 +4871,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     });
                     hf_frame = Some((in_header, FrameReading { extent: size("svg:width").zip(size("svg:height")), sides: None, anchor, href: None, alt: String::new(), in_alt: false, depth: 0, text_box: None, look: Default::default() }));
                     hf_frame_place = hf_box_place(attr_val(&e, "draw:style-name").as_deref(), attr_val(&e, "svg:y").as_deref(), &named);
+                    let (pad_l, pad_r) = attr_val(&e, "draw:style-name").and_then(|n| named.graphic_padding_x.get(&n).copied()).unwrap_or((0.0, 0.0));
+                    hf_frame_width = attr_val(&e, "svg:width").and_then(|w| parse_length_pt(&w)).map(|w| w - pad_l - pad_r).filter(|w| w.is_finite() && *w > 0.0);
                 }
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "draw:image" => {
                     if let Some((_, f)) = hf_frame.as_mut().filter(|(_, f)| f.href.is_none()) {
@@ -4764,7 +4963,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             // table row's line is the cell's that holds
                             // its text, not its first, empty cell's.
                             if new_line || !hf_styled {
-                                let line = hf_line(attr_val(&e, "text:style-name").as_deref(), &named);
+                                let mut line = hf_line(attr_val(&e, "text:style-name").as_deref(), &named);
+                                if hf_row.is_some() && !hf_row_joined {
+                                    line.cell = hf_cell;
+                                }
                                 let lines = if in_header { Some(&mut doc.header_lines) } else if in_footer { Some(&mut doc.footer_lines) } else { None };
                                 if let Some(lines) = lines {
                                     if new_line {
@@ -4777,11 +4979,17 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         }
                     }
                     "text:span" if in_header || in_footer => hf_spans.push(attr_val(&e, "text:style-name")),
-                    "table:table-row" if in_any_header || in_any_footer => hf_row = Some(false),
+                    "table:table-row" if in_any_header || in_any_footer => {
+                        hf_row = Some(false);
+                        hf_col = 0;
+                        hf_row_joined = false;
+                        hf_row_text = false;
+                    }
                     "draw:text-box" if in_header || in_footer => {
                         hf_box_depth += 1;
                         if hf_box.is_none() {
-                            hf_box = Some(HfBox { lines: Vec::new(), float: hf_frame_place.0, across: hf_frame_place.1 });
+                            let grows = attr_val(&e, "fo:min-width").is_some();
+                            hf_box = Some(HfBox { lines: Vec::new(), float: hf_frame_place.0, across: hf_frame_place.1, width: hf_frame_width.filter(|_| !grows) });
                         }
                     }
                     // Writer's own text box: its paragraphs are inside it.
@@ -4789,7 +4997,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         hf_box_depth += 1;
                         if hf_box.is_none() {
                             let (float, across) = hf_box_place(attr_val(&e, "draw:style-name").as_deref(), attr_val(&e, "svg:y").as_deref(), &named);
-                            hf_box = Some(HfBox { lines: Vec::new(), float, across });
+                            hf_box = Some(HfBox { lines: Vec::new(), float, across, width: None });
                         }
                     }
                     "svg:title" | "svg:desc" => in_alt = true,
@@ -4859,8 +5067,19 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 Ok(Event::Text(t)) => {
                     let txt = unescape_text(&t);
                     let gap = hf_cell_gap && !txt.trim().is_empty();
+                    let row_had_text = hf_row_text;
+                    hf_row_text |= hf_row.is_some() && !txt.trim().is_empty() && hf_box_depth == 0;
                     if gap {
                         hf_cell_gap = false;
+                        // A second cell with text: the row reads as one line
+                        // across the whole width.
+                        if (in_header || in_footer) && row_had_text {
+                            hf_row_joined = true;
+                            let lines = if in_header { &mut doc.header_lines } else { &mut doc.footer_lines };
+                            if let Some(line) = lines.last_mut() {
+                                line.cell = None;
+                            }
+                        }
                     }
                     if let Some(m) = cur_master.as_ref().and_then(|n| master_pages.get_mut(n)).filter(|_| !txt.trim().is_empty()) {
                         if in_any_header {
@@ -5414,8 +5633,70 @@ mod tests {
         assert_eq!((&rt.header_lines, &rt.footer_lines), (&d.header_lines, &d.footer_lines));
     }
 
+    /// A header set as a table reads each row as a line set in the cell
+    /// its text is in (Writer ends a right-aligned "FINANCE BILL" at its
+    /// last column's edge, inside the cell's padding, not at the margin);
+    /// a row with text in two cells reads across the whole width, as it
+    /// did.
+    #[test]
+    fn a_header_tables_text_is_set_in_its_cell() {
+        let styles = |cells: &str| format!(
+            "<office:document-styles><office:automatic-styles>\
+             <style:style style:name=\"T\" style:family=\"table\"><style:table-properties style:width=\"5in\" fo:margin-left=\"0in\" table:align=\"left\"/></style:style>\
+             <style:style style:name=\"C1\" style:family=\"table-column\"><style:table-column-properties style:column-width=\"3in\"/></style:style>\
+             <style:style style:name=\"C2\" style:family=\"table-column\"><style:table-column-properties style:column-width=\"2in\"/></style:style>\
+             <style:style style:name=\"Cell\" style:family=\"table-cell\"><style:table-cell-properties fo:padding-left=\"0.1in\" fo:padding-right=\"0.1in\"/></style:style>\
+             <style:style style:name=\"R\" style:family=\"paragraph\"><style:paragraph-properties fo:text-align=\"end\"/></style:style>\
+             </office:automatic-styles><office:master-styles><style:master-page style:name=\"Standard\"><style:header>\
+             <table:table table:style-name=\"T\"><table:table-column table:style-name=\"C1\"/><table:table-column table:style-name=\"C2\"/>\
+             <table:table-row>{cells}</table:table-row></table:table></style:header></style:master-page></office:master-styles></office:document-styles>"
+        );
+        let content = "<office:document-content><office:body><office:text><text:p>body</text:p></office:text></office:body></office:document-content>";
+        let one = read_package(content, &styles("<table:table-cell table:style-name=\"Cell\"><text:p/></table:table-cell><table:table-cell table:style-name=\"Cell\"><text:p text:style-name=\"R\">FINANCE BILL</text:p></table:table-cell>"));
+        assert_eq!(one.header.as_deref(), Some("FINANCE BILL"));
+        let cell = one.header_lines[0].cell.expect("set in its cell");
+        assert_eq!(one.header_lines[0].alignment, Alignment::Right);
+        assert!((cell.left_pt - 223.2).abs() < 1e-9 && (cell.width_pt - 129.6).abs() < 1e-9, "the second column, inside its padding: {cell:?}");
+        let two = read_package(content, &styles("<table:table-cell table:style-name=\"Cell\"><text:p>Left</text:p></table:table-cell><table:table-cell table:style-name=\"Cell\"><text:p text:style-name=\"R\">Right</text:p></table:table-cell>"));
+        assert_eq!(two.header.as_deref(), Some("Left Right"));
+        assert_eq!(two.header_lines[0].cell, None, "two cells with text read across the width");
+    }
+
+    /// A footer label in a text frame narrower than its text keeps the
+    /// frame's width, as Writer keeps it (it does not grow a text frame
+    /// to its text, so "OFFICIAL" in a 0.49in box wraps there), unless the
+    /// text box sets a minimum width; and the width survives a save.
+    #[test]
+    fn a_footer_frame_keeps_its_width() {
+        use crate::model::{HfFloat, HfLine};
+        let styles = |text_box: &str| format!(
+            "<office:document-styles><office:automatic-styles>\
+             <style:style style:family=\"graphic\" style:name=\"a0\"><style:graphic-properties fo:wrap-option=\"no-wrap\" \
+             fo:padding-top=\"0in\" fo:padding-bottom=\"0.25in\" fo:padding-left=\"0in\" fo:padding-right=\"0in\" \
+             style:wrap=\"run-through\" style:horizontal-rel=\"page\" style:vertical-rel=\"page\" style:horizontal-pos=\"center\" \
+             style:vertical-pos=\"bottom\" draw:auto-grow-width=\"true\"/></style:style>\
+             </office:automatic-styles><office:master-styles><style:master-page style:name=\"Standard\"><style:footer><text:p>\
+             <draw:frame draw:style-name=\"a0\" text:anchor-type=\"paragraph\" svg:width=\"0.5in\" svg:height=\"0.5in\">{text_box}\
+             <text:p>OFFICIAL</text:p></draw:text-box></draw:frame></text:p></style:footer></style:master-page></office:master-styles></office:document-styles>"
+        );
+        let content = "<office:document-content><office:body><office:text><text:p>body</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, &styles("<draw:text-box>"));
+        let line = &d.footer_lines[0];
+        assert_eq!((line.float, line.alignment, line.float_width_pt, line.float_text_alignment), (Some(HfFloat::Bottom(18.0)), Alignment::Center, Some(36.0), Alignment::Left));
+        let grows = read_package(content, &styles("<draw:text-box fo:min-width=\"0.5in\">"));
+        assert_eq!(grows.footer_lines[0].float_width_pt, None, "a text box with a minimum width grows");
+        let mut d = Document::from_plain_text("body");
+        d.footer = Some("OFFICIAL\n{page}".into());
+        d.footer_lines = vec![
+            HfLine { alignment: Alignment::Center, float: Some(HfFloat::Bottom(15.0)), float_width_pt: Some(36.0), float_text_alignment: Alignment::Right, ..Default::default() },
+            HfLine::default(),
+        ];
+        assert_eq!(round_trip(&d).footer_lines, d.footer_lines);
+    }
+
     /// A floating picture is a frame anchored to its paragraph, placed by
-    /// a graphic style of its own, and reads back placed the same.
+    /// a graphic style of its own, and reads back placed the same, its
+    /// contour wrap too.
     #[test]
     fn a_floating_picture_round_trips_its_placement() {
         use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor};
@@ -5425,6 +5706,8 @@ mod tests {
         let placements = [
             ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() },
             ImageAnchor { h_from: AnchorFrame::Page, x_emu: 914_400, v_from: AnchorFrame::Page, v_align: Some(AnchorAlign::Center), behind: true, ..Default::default() },
+            // Wrapped to its contour (`style:wrap-contour`).
+            ImageAnchor { h_from: AnchorFrame::Margin, v_from: AnchorFrame::Text, wrap: crate::model::Wrap::Parallel, contour: true, ..Default::default() },
         ];
         let mut d = Document::from_plain_text("");
         d.paragraphs = placements
@@ -5809,6 +6092,27 @@ mod tests {
         assert_eq!(d.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![0]));
     }
 
+    /// A table's heading rows (`table:table-header-rows`) are read as its
+    /// repeated header and written back inside the element, the rows after
+    /// them outside it.
+    #[test]
+    fn heading_rows_round_trip() {
+        let content = "<office:document-content><office:body><office:text><table:table table:name=\"T\">\
+            <table:table-column/><table:table-header-rows><table:table-row><table:table-cell><text:p>head</text:p></table:table-cell></table:table-row></table:table-header-rows>\
+            <table:table-row><table:table-cell><text:p>body</text:p></table:table-cell></table:table-row></table:table>\
+            <text:p>after</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let id = d.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+        assert_eq!(d.table_header_rows.get(&id), Some(&1));
+        let mut two = Document::from_plain_text("after");
+        let table = two.insert_table_at(0, 3, 1);
+        two.table_header_rows.insert(table, 2);
+        let rt = round_trip(&two);
+        let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+        assert_eq!(rt.table_header_rows.get(&id), Some(&2));
+        assert!(round_trip(&Document::from_plain_text("after")).table_header_rows.is_empty());
+    }
+
     /// A first page's master that names a different next master gives
     /// the first page its own header and footer and the pages after it
     /// the next master's, as Writer lays it out: a form's logo header and
@@ -5879,6 +6183,37 @@ mod tests {
         let rt = round_trip(&d);
         assert_eq!(rt.paragraphs[0].style.left_indent_pt, 0.0);
         assert_eq!(rt.paragraphs[1].style.left_indent_pt, 0.0);
+    }
+
+    /// A list level's label face is read from the level's own text
+    /// properties (a font-face declaration's family), else from the text
+    /// style it names; a symbol face (OpenSymbol) is left out, its bullets
+    /// already read as Unicode glyphs (#2421).
+    #[test]
+    fn a_list_label_takes_its_levels_face() {
+        let content = "<office:document-content><office:font-face-decls>\
+            <style:font-face style:name=\"Courier New1\" svg:font-family=\"&apos;Courier New&apos;\"/></office:font-face-decls>\
+            <office:automatic-styles>\
+            <style:style style:name=\"T9\" style:family=\"text\"><style:text-properties style:font-name=\"Noto Sans Symbols\"/></style:style>\
+            <text:list-style style:name=\"L1\">\
+              <text:list-level-style-bullet text:level=\"1\" text:bullet-char=\"●\" text:style-name=\"T9\"/>\
+              <text:list-level-style-bullet text:level=\"2\" text:bullet-char=\"o\"><style:text-properties style:font-name=\"Courier New1\"/></text:list-level-style-bullet>\
+              <text:list-level-style-bullet text:level=\"3\" text:bullet-char=\"■\"><style:text-properties style:font-name=\"OpenSymbol\"/></text:list-level-style-bullet>\
+              <text:list-level-style-bullet text:level=\"4\" text:bullet-char=\"-\"/>\
+            </text:list-style></office:automatic-styles><office:body><office:text>\
+            <text:list text:style-name=\"L1\"><text:list-item><text:p>one</text:p>\
+              <text:list><text:list-item><text:p>two</text:p>\
+                <text:list><text:list-item><text:p>three</text:p>\
+                  <text:list><text:list-item><text:p>four</text:p></text:list-item></text:list>\
+                </text:list-item></text:list>\
+              </text:list-item></text:list>\
+            </text:list-item></text:list><text:p>after</text:p>\
+            </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        let faces: Vec<Option<&str>> = d.paragraphs.iter().map(|p| p.style.list_label_font.as_deref()).collect();
+        assert_eq!(faces, [Some("Noto Sans Symbols"), Some("Courier New"), None, None, None]);
+        let levels: Vec<u8> = d.paragraphs.iter().map(|p| p.style.list_level).collect();
+        assert_eq!(levels, [0, 1, 2, 3, 0]);
     }
 
     /// A label-aligned list's item whose paragraph sets its own indents

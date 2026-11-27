@@ -165,6 +165,12 @@ fn write_body_pr<W: std::io::Write>(writer: &mut Writer<W>, body: &TextBody) -> 
     if body.anchor != Anchor::Top || body.placeholder.is_some() {
         b.push_attribute(("anchor", body.anchor.to_drawingml()));
     }
+    if let Some(cols) = body.columns {
+        b.push_attribute(("numCol", cols.count.to_string().as_str()));
+        if cols.gap > 0.0 {
+            b.push_attribute(("spcCol", emu(cols.gap).as_str()));
+        }
+    }
     let Some(fit) = body.autofit else {
         writer.write_event(Event::Empty(b))?;
         return Ok(());
@@ -375,6 +381,12 @@ fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: 
     if style.underline { r_pr.push_attribute(("u", "sng")); }
     if style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
     if style.caps { r_pr.push_attribute(("cap", "all")); } else if style.small_caps { r_pr.push_attribute(("cap", "small")); }
+    // PowerPoint's own superscript and subscript shifts.
+    match style.vert_align {
+        Some(suite_common_core::document::VertAlign::Superscript) => r_pr.push_attribute(("baseline", "30000")),
+        Some(suite_common_core::document::VertAlign::Subscript) => r_pr.push_attribute(("baseline", "-25000")),
+        None => {}
+    }
     let family = style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty());
     let link = style.link.as_ref().and_then(|target| links.get(target));
     if style.color.is_some() || family.is_some() || link.is_some() {
@@ -1895,7 +1907,15 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                         write_image(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, crop).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Chart { x, y, w, h, rotation, chart } => {
-                        charts.push(super::chart::chart_space_xml(chart));
+                        // The text size back onto the file's slide, as
+                        // a run's is (`file_size`).
+                        let mut chart = chart.clone();
+                        let back = |v: u32| file_size(v as f64).round().max(1.0) as u32;
+                        chart.text_size = chart.text_size.map(back);
+                        if let Some(t) = chart.title.as_mut() {
+                            t.size = t.size.map(back);
+                        }
+                        charts.push(super::chart::chart_space_xml(&chart));
                         let rel_id = format!("rId{}", slide_rels.len() + 1);
                         slide_rels.push((rel_id.clone(), super::chart::CHART_REL, format!("../charts/chart{}.xml", charts.len())));
                         write_chart_frame(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;

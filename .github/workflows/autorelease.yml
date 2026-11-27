@@ -5,7 +5,7 @@ name: Autorelease
 # the documented release steps could not pass: the ledger had to record the
 # release commit's own SHA (docs/RELEASE.md).
 #
-# Every week, when main has changed since the last tag:
+# Every day, when main has changed since the last tag:
 #
 #   plan      the next version (minor bump by default), or nothing to do
 #   oracle    nightly.yml's LibreOffice oracle at main's head X
@@ -21,23 +21,19 @@ name: Autorelease
 # pushed to. cut_release.py writes earlier tags back into each release's
 # AppStream history.
 #
-# A merge to main starts a run too (patch bump). The concurrency group below
-# keeps one run going and one waiting, so a burst of merges is released as one
-# version, cut from whatever main is when the waiting run starts. Changes to
-# documentation alone do not start a run. The weekly run still bumps the minor
-# version.
+# Daily, not on each merge. Each release runs publish-flatpak.yml's soak: 20
+# runs of every journey on 10 parallel runners for about four hours. Per-merge
+# releases (v2.1.95 to v2.1.107 in four days) queued several soaks at once,
+# and on 2026-11-24 the soak used 72% of this repository's runner minutes
+# (3,213 of 4,438). The Wednesday run bumps the minor version, the other days
+# the patch version. Dispatch this workflow for a release between runs.
 #
 # A tag pushed with GITHUB_TOKEN starts no workflow, which is why this run
 # dispatches publish-flatpak.yml and release-gate.yml itself.
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
   schedule:
-    - cron: '41 7 * * 3'   # Wednesdays 07:41 UTC, after nightly.yml's 05:00 run
+    - cron: '41 7 * * *'   # daily 07:41 UTC, after nightly.yml's 05:00 run
   workflow_dispatch:
     inputs:
       bump:
@@ -75,7 +71,7 @@ jobs:
       - name: Decide whether there is anything to release
         id: plan
         env:
-          BUMP: ${{ inputs.bump || (github.event_name == 'push' && 'patch') || 'minor' }}
+          BUMP: ${{ inputs.bump || (github.event_name == 'schedule' && github.event.schedule == '41 7 * * 3' && 'minor') || 'patch' }}
           FORCE: ${{ inputs.force || false }}
         run: |
           set -euo pipefail

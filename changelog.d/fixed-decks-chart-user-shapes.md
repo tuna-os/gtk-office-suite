@@ -1,0 +1,1 @@
+- Decks: text a PowerPoint chart carries in its own drawing (a percentage in a doughnut's hole, a key beside the chart) is drawn over the chart, as PowerPoint and Impress draw it, and kept on save as text boxes.

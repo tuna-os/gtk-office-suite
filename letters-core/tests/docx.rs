@@ -2164,6 +2164,26 @@ fn a_heading_row_is_kept_whole() {
     assert_eq!(rt.table_whole_rows.get(&id).map(|r| r.iter().copied().collect::<Vec<_>>()), Some(vec![0]));
 }
 
+/// A table's heading rows (`w:tblHeader`) are read as its repeated
+/// header and stay so through a save and reopen; a row under them that
+/// does not say so is not one.
+#[test]
+fn heading_rows_survive() {
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 3, 1);
+    let rt = doctor_document_xml(&d, |xml| xml.replacen("<w:tr>", "<w:tr><w:trPr><w:tblHeader/></w:trPr>", 1));
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert_eq!(rt.table_header_rows.get(&id), Some(&1));
+    let mut two = Document::from_plain_text("after");
+    let table = two.insert_table_at(0, 3, 1);
+    two.table_header_rows.insert(table, 2);
+    let rt = round_trip(&two);
+    let id = rt.paragraphs.iter().find_map(|p| p.style.table_cell).unwrap().table;
+    assert_eq!(rt.table_header_rows.get(&id), Some(&2));
+    let none = round_trip(&Document::from_plain_text("after"));
+    assert!(none.table_header_rows.is_empty());
+}
+
 /// A table sized as a share of the text's width stays so through a save
 /// and reopen (`w:tblW w:type="pct"`); one with the file's widths does not
 /// become one.
