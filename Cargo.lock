@@ -2857,6 +2857,7 @@ name = "letters-core"
 version = "0.1.0"
 dependencies = [
  "cairo-rs",
+ "image",
  "jiff",
  "loro",
  "pango",

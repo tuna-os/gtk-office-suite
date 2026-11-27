@@ -1,0 +1,1 @@
+- Decks: a chart data label whose text the file writes in place of the value (`c:dLbl/c:tx`) shows that text, and keeps it on save.

@@ -623,12 +623,27 @@ journeys run in `edit_journeys.py`. Tier C now runs over the real corpus
 too: `render-parity.yml`'s nightly `vm-real` job opens every real document
 in the shipped Flatpak in the GNOME VM, in the window Tiers A and B use
 (1100x1700; it had been GNOME's default 960x680, which turned 12 real
-workbooks red in Tier C alone, #2319). Its first verdicts are committed:
-of the 85 documents that can still be fetched, 19 are green, 62 amber and 4
-red, and the 4 red ones are red in Tiers A and B too. Five Tables documents
-have no Tier C verdict: three sources now answer HTTP 410, and two were not
-captured. The exit still waits on those reds and ambers: Tier C on the real
-corpus is ratcheted, not yet green.*
+workbooks red in Tier C alone, #2319). Its first verdicts had 19 of the 85
+documents that can still be fetched green, 62 amber and 4 red.
+
+The runs of 2026-11-21 on main have none red. The first (render-parity run
+44892542989) had 22 green and 63 amber: the four red workbooks moved off red
+to amber once hidden rows and columns, merged-cell borders and the
+wide-sheet window were drawn. One Letters form (opt-out-form) moved from
+green to amber on two lost lines: its bold title wraps "Armed" to the
+second line where Writer keeps it on the first. The later run (44919831054), which the baseline follows,
+has 25 green and 60 amber: three Letters documents turned green, and the
+ukhsa transactions workbook, green in the first, is amber at ssim 0.73, just
+under the line. deep-sea-stock read green there and amber in the next run
+(44941036908, 27 green and 58 amber), so it is held at amber. Five Tables documents still have no
+Tier C verdict: three sources answer HTTP 410, and two were not captured.
+The nightlies of 2026-11-23, -24 and -25 (latest: 45621842241) agree:
+30 green, 55 amber, 0 red. Seven more documents turned green (cnsc,
+explanatory-note, sma, transparency-information, available-data,
+otsi-annual-review, safeguarding-children), and pay-centre-innovation, green
+on 2026-11-21, reads amber on one lost line in all three. The baseline
+follows them, so the nightly's ratchet passes. The exit still waits on the
+ambers: Tier C on the real corpus is ratcheted, not yet green.*
 
 ### Phase 4: Earn "usable"
 
