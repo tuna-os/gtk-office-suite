@@ -418,8 +418,34 @@ const PIXELS_PER_CHAR: f64 = 7.0;
 const POINTS_PER_PIXEL: f64 = 0.75;
 
 fn width_chars_to_pixels(chars: f64) -> f64 {
+    width_chars_to_pixels_with(chars, PIXELS_PER_CHAR)
+}
+
+/// The maximum digit width in pixels of the workbook's default font, which
+/// is the unit `<col width>` counts in. Calibri 11 is 7 px; Arial 12 (the
+/// MenB workbook, #1325) is 9 px, so a stored 100.66 is 906 px, not 705.
+/// Only the digit advance of the two common families is known (Calibri and
+/// its metric twin Carlito 0.507 em, Arial and its twins 0.556 em); any
+/// other font keeps the Calibri 11 assumption.
+fn max_digit_width(default_font: Option<&(String, f64)>) -> f64 {
+    let Some((family, size)) = default_font else { return PIXELS_PER_CHAR };
+    if !size.is_finite() || *size <= 0.0 {
+        return PIXELS_PER_CHAR;
+    }
+    let f = family.to_ascii_lowercase();
+    let em = if f == "calibri" || f == "carlito" {
+        0.507
+    } else if matches!(f.as_str(), "arial" | "liberation sans" | "helvetica" | "arimo") {
+        0.556
+    } else {
+        return PIXELS_PER_CHAR;
+    };
+    (size / POINTS_PER_PIXEL * em).round().max(1.0)
+}
+
+fn width_chars_to_pixels_with(chars: f64, mdw: f64) -> f64 {
     let w = chars.max(0.0);
-    ((256.0 * w + (128.0 / PIXELS_PER_CHAR).trunc()) / 256.0 * PIXELS_PER_CHAR).trunc()
+    ((256.0 * w + (128.0 / mdw).trunc()) / 256.0 * mdw).trunc()
 }
 
 fn height_points_to_pixels(points: f64) -> f64 {
@@ -514,6 +540,7 @@ pub fn read_sheet_props_from_xlsx(
     let theme_xml = zip.optional_part_to_string("xl/theme/theme1.xml", &mut budget);
     let xf_styles = super::xlsx_styles::parse_cell_styles_with_theme(&styles_xml, &theme_xml);
     let default_font = super::xlsx_styles::default_font(&styles_xml);
+    let mdw = max_digit_width(default_font.as_ref());
     // After the styles: a run's theme colours resolve against the palette
     // they set.
     let rich_strings = super::xlsx_styles::rich_shared_strings(&zip.optional_part_to_string("xl/sharedStrings.xml", &mut budget));
@@ -583,7 +610,7 @@ pub fn read_sheet_props_from_xlsx(
                         xml_attr(tag, "width")
                             .and_then(|v| v.parse::<f64>().ok())
                             .filter(|w| w.is_finite() && *w >= 0.0)
-                            .map(width_chars_to_pixels)
+                            .map(|w| width_chars_to_pixels_with(w, mdw))
                     } else {
                         None
                     };
@@ -858,6 +885,19 @@ mod sheet_props_tests {
         assert_eq!(width_chars_to_pixels(12.0), 84.0);
         assert_eq!(width_chars_to_pixels(40.0), 280.0);
         assert_eq!(width_chars_to_pixels(0.0), 0.0);
+    }
+
+    /// `<col width>` counts in the default font's digit widths: Arial 12 is
+    /// 9 px a unit, Calibri 11 stays 7 (#1875).
+    #[test]
+    fn column_width_unit_follows_the_default_font() {
+        let arial = ("Arial".to_string(), 12.0);
+        let calibri = ("Calibri".to_string(), 11.0);
+        assert_eq!(max_digit_width(Some(&arial)), 9.0);
+        assert_eq!(max_digit_width(Some(&calibri)), 7.0);
+        assert_eq!(max_digit_width(None), 7.0);
+        assert_eq!(max_digit_width(Some(&("Mystery".to_string(), 12.0))), 7.0);
+        assert_eq!(width_chars_to_pixels_with(100.6640625, 9.0), 906.0);
     }
 
     #[test]
