@@ -6,7 +6,7 @@ engineers: contact list (`tables/real-service-reservoir-panel-engineers-contact-
 
 ## Source document and observed defect
 
-- **Source file**: `Service_reservoirs_panel_engineers_-_October_2026.ods` (sha256 `3364dfb1b6adf02a614077ba9ad9ddfe6c0321061dc9fa0fc77a5885ba65a9c2`, OGL-UK-3.0).
+- **Source file**: `Service_reservoirs_panel_-_November_2026.ods` (sha256 `147d0a571e4c124310c11745c70179e1cbf4f25f69895c483c8ca81d487eecc2`, OGL-UK-3.0). The October 2026 file this issue was first measured on (sha256 `3364dfb1…`) was withdrawn by gov.uk (HTTP 410) and replaced by this one with the same sheet and columns.
 - **Structure**: A single worksheet (`Service_reservoir_panel_list`) containing 8 rows (rows 1–3 title and guidance prose, row 4 empty, row 5 table header, rows 6–7 engineer contact records, row 8 empty) and 15 columns (A through O: `Surname`, `Forename`, `Title`, `Company name`, `Address line 2`, `Address line 3`, `Town`, `Post Town`, `County`, `Post Code`, `Phone Number`, `Mobile Number`, `Email Address`, `Existing panel`, `Joint corresponding panel`).
 - **Dimensions**: Column widths total 74.3 cm (~29.3 inches, ~2,808px at 96 DPI). Cell text, standard fonts (Arial 12pt/14pt), and hyperlink styling are handled accurately by `tables-core`.
 - **LibreOffice headless PDF**: Headless LibreOffice Calc PDF export in portrait orientation (A4 with ~0.7in margins, printable width ~6.87in / ~17.4cm) cannot fit a 74.3 cm wide table onto a single page width. Calc therefore paginates the sheet horizontally across 6 pages (`lo_pages: 6`), where `lo-1.png` holds only columns A through D.
