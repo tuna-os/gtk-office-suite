@@ -12,6 +12,7 @@ use crate::doc_tab::{
     tab_data_get, tab_data_set, TabData,
 };
 
+mod import_article;
 mod saving;
 use saving::{close_all_dirty_pages, do_save, SaveOutcome};
 
@@ -136,6 +137,7 @@ impl LettersWindow {
             ("app.page-setup", &suite_common::i18n("Page Setup…")),
             ("app.print", &suite_common::i18n("Print…")),
             ("app.print-preview", &suite_common::i18n("Print Preview")),
+            ("app.import-web-article", &suite_common::i18n("Import Saved Web Article…")),
             ("app.export-pdf", &suite_common::i18n("Export as PDF…")),
             ("app.export-pdf-typst", &suite_common::i18n("Export as PDF With Typst (Approximate)…")),
             ("app.edit-headers", &suite_common::i18n("Edit Headers and Footers…")),
@@ -988,6 +990,9 @@ impl LettersWindow {
             });
             app.add_action(&a);
         }
+
+        // Import a saved web article (#1787); see window/import_article.rs.
+        import_article::register(app, tv, st, wc, sl, win, settings);
 
         // Open file
         {

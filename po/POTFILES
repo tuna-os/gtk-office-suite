@@ -15,6 +15,7 @@ letters/src/page_view.rs
 letters/src/printing.rs
 letters/src/style_picker.rs
 letters/src/window.rs
+letters/src/window/import_article.rs
 letters/src/window/saving.rs
 decks/src/main.rs
 decks/src/window.rs

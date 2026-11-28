@@ -23,6 +23,15 @@ round trip is in [INTEROP-EVIDENCE.md](INTEROP-EVIDENCE.md) and
 | HTML | `.html`, `.htm` | `text/html` | yes | yes |
 | Plain text | `.txt`, `.text` | `text/plain` | yes | yes |
 
+**Import Saved Web Article…** (Letters) is a separate, explicit import of a
+saved `.html`, `.htm` or `.xhtml` page into a new untitled document: title,
+byline, date and source URL first, then headings, lists, quotes, code, inline
+emphasis, http/https/mailto links and local PNG/JPEG/GIF/WebP images that sit
+in the page's own folder. Scripts, frames, forms, style sheets and remote
+images are never run or fetched; the import lists what was left out. Limits:
+8 MiB of HTML, 10 MiB per image, 100 images. Opening a `.html` file directly
+is unchanged.
+
 A file with any other extension opens as Markdown. A save to any other
 extension is refused, naming the ones Letters can write.
 
